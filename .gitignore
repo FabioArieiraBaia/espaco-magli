@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Production builds
+frontend/build/
+production_*/
+espacomagli.zip
+magli.zip
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Database (keep schema, ignore local data)
+api/database/magli.db
+api/database/*.db-journal
+api/database/*.db-wal
+
+# PHP storage/uploads (optional, depends if you want to keep existing uploads)
+api/uploads/*
+!api/uploads/.gitkeep
