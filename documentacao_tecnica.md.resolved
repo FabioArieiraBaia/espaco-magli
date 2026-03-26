@@ -1,0 +1,80 @@
+# Documentação Técnica: Sistema de Gestão Espaço Magli
+
+**Autor:** Fabio Arieira (Desenvolvedor Full Stack Sênior - 30 anos de experiência)  
+**Destinatária:** Daiane Magliano (Gestora / Especialista de Treinamento)  
+**Data da Build:** Março de 2026
+
+---
+
+## 1. Visão Geral da Arquitetura
+
+O sistema "Espaço Magli" foi projetado e construído sob a premissa de alta performance, portabilidade e segurança, empregando uma arquitetura **desacoplada** (Frontend e Backend independentes). Essa abordagem não apenas elimina o recarregamento de páginas, oferecendo uma experiência extremamente fluida e semelhante a aplicativos nativos, mas também simplifica manutenções futuras e integrações.
+
+### 1.1 Stack Tecnológico
+- **Frontend (A Interface de Apresentação e Interação):**
+  - Desenvolvido em **React.js 18** (Livraria de ponta construída pelo Facebook).
+  - Utilizado **React Router DOM v6** para navegação sem solavancos ("Single Page Application" - SPA).
+  - **Axios** atua como integrador principal de rede com robustez na interceptação e manipulação de fluxos.
+  - Implementação completa como **PWA (Progressive Web App)**, permitindo instalação direta nos dispositivos mobile/desktop como um aplicativo real.
+  - Sincronização offline nativa e inteligente utilizando bibliotecas internas como **IndexedDB**.
+- **Backend (O Motor Lógico e Repositório):**
+  - **PHP 8+** utilizado como motor lógico de microsserviços por meio de um Endpoint nativo focado ([api/index.php](file:///c:/xampp/htdocs/Magli/api/index.php)).
+  - Rotas parametrizadas dinamicamente tratam a injeção via REST (GET, PUT, POST, DELETE).
+- **Banco de Dados (Armazenamento de Dados):**
+  - **SQLite 3** utilizado através do **PDO (PHP Data Objects)**.
+  - Escolha estratégica para permitir altíssima velocidade e portabilidade sem a necessidade de instanciar e gerenciar servidores pesados (como MySQL no cPanel).
+  - Um único arquivo de base de dados comporta tudo, simplificando imensamente as rotinas de backup construídas via interface.
+
+---
+
+## 2. Padrões de Segurança
+
+Como um sistema fechado e restrito (na maior parte das áreas), o cuidado com dados de clientes foi de suma prioridade.
+
+- **Autenticação via Token Base 64 Codificado:** Toda requisição interna leva um token validado na camada de transporte (Header HTTP "Authorization").
+- **Criptografia Nível de Banco de Dados:** Não armazenamos as senhas em "Clear Text". As senhas das professoras/administradoras usam o Algoritmo BCRYPT nativo da indústria de Cybersecurity (via `password_hash()` e `password_verify()`).
+- **Bloqueio Físico via .htaccess:** Pastas, APIs e arquivos vitais do Banco de Dados estão proibidos de listagem em Apache servers e acessíveis unicamente pela aplicação.
+- **Preparação Contra injeções SQL:** 100% das comunicações com a base de dados utilizam o padrão corporativo de *Prepared Statements*, desarticulando toda e qualquer possível tentativa de hacking SQL Injection.
+
+---
+
+## 3. Composição de Módulos (Features)
+
+Para simplificar o entendimento de expansões futuras, veja a estrutura modular do sistema:
+
+### Módulo PWA & Conexão:
+O coração da velocidade. O [service-worker.js](file:///c:/xampp/htdocs/Magli/frontend/public/service-worker.js) gerencia as conexões e cacheia todas as telas, imagens e lógicas no celular do usuário logo na primeira visita. Existe um script interceptador ([offlineSync.js](file:///c:/xampp/htdocs/Magli/frontend/src/utils/offlineSync.js)), que salva ações temporárias das professoras em um cache (IndexedDB) no celular, e quando elas reentram no Wifi (após uma queda de energia ou área sem ddd), os dados sobem de fundo silenciosamente.
+
+### Módulo de "Equipe" (Professores):
+Apenas para Gestor Nível Administrador ("Daiane").
+- Adiciona, exclui ou desativa credenciais de professores.
+- Vincula professores as suas alunas com monitoramento em tempo real de "Qudros x Treinos".
+
+### Módulo "Alunas" & Ficha Cadastral:
+Motor do negócio de personalização ("Daiane Ficha Cadastral").
+- Permite coleta, armazenagem robusta e vinculação de histórico biométrico (Peso, Objetivo, Medidas e Doenças pré-existentes - Anamnese).
+- Cada aluna obrigatoriamente vincula a um perfil Professora.
+
+### Módulo "Quadro de Horários e Agenda":
+O core visual da gestão de tráfego na academia. Mostra por blocos de hora quem está no espaço, facilitando a visualização da densidade de pessoas no dia.
+
+### Módulo "Troca de Treinos" (Geral e Dinâmico):
+O coração operacional das professoras. Controlam duração semanal, gerenciam trocas automáticas e o Status (Pendente/Concluído) alertam de tempos vencidos para forçar progressão do estímulo ao cliente (Renovação Contínua).
+
+### Módulo Master de Landing Page & Configurações:
+Controla o FrontOffice (Website de aquisição público). A página lê ao vivo o banco de dados do Backend para precificar os botões e ofertas – reduzindo o atrito para atualizar vendas.
+
+---
+
+## 4. Notas sobre "Deploy" (Instalação em Produção Otimizada)
+
+O deploy é gerado compilando o React. Foi formatado usando o parâmetro JSON: `"homepage": "https://fabioarieira.com/magli"`.
+
+Para atualizações futuras:
+1. Use `npm run build` na pasta `frontend`.
+2. Pegue o conteúdo gerado em `build` e mescle com o container `api`.
+3. Todo pacote é empacotado (`magli_producao.zip`) preparado para ser descompactado e sobrescrito em cima do domínio cPanel. O arquivo [.htaccess](file:///c:/xampp/htdocs/Magli/api/.htaccess) cuida da mágica do React Router e Subfolders.
+
+---
+
+> *"Arquitetura limpa reflete negócios de sucesso. O Espaço Magli agora conta com um código que não envelhece."* – **Fabio Arieira**

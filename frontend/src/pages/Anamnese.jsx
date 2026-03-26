@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import BioimpedanciaReport from '../components/BioimpedanciaReport';
 
 const initialAnamnese = {
     idade: '', estado_civil: '', profissao: '',
@@ -28,6 +29,7 @@ const initialAnamnese = {
     passou_cirurgias: 'nao', cirurgias_qual: '',
     ultimo_ciclo: '', menopausa: 'nao', menopausa_desde: '',
     info_adicionais: '',
+    bioimpedancia_json: []
 };
 
 const sn = (val) => val === 'sim' ? '✓ Sim' : '✗ Não';
@@ -80,16 +82,99 @@ const FamiliarRow = ({ field, textField, label, form, h }) => (
     </div>
 );
 
-const AnamneseForm = ({ form, onChange, onSave, onCancel, title, saving }) => {
+const AnamneseForm = ({ form, onChange, onSave, onCancel, title, saving, bioLink, setBioLink, onImportBio, isBioOpen, setIsBioOpen }) => {
     const h = (field, value) => onChange(field, value);
 
     return (
         <div className="page fade-in">
-            <div className="page-header">
-                <h1>🩺 {title}</h1>
-                <div className="flex gap-1">
-                    <button className="btn btn-sm btn-primary" onClick={onSave} disabled={saving}>{saving ? 'Salvando...' : '💾 Salvar'}</button>
-                    <button className="btn btn-sm btn-outline" onClick={onCancel}>← Voltar</button>
+            <div className="page-header" style={{ marginBottom: '1.5rem' }}>
+                <h1 style={{ fontSize: '1.8rem', color: '#fff' }}>🩺 {title}</h1>
+                <div className="flex gap-2">
+                    <button className="btn btn-primary" onClick={onSave} disabled={saving} style={{ padding: '0.6rem 1.2rem' }}>
+                        {saving ? 'Salvando...' : '💾 Salvar'}
+                    </button>
+                    <button className="btn btn-outline" onClick={onCancel} style={{ padding: '0.6rem 1.2rem' }}>← Voltar</button>
+                </div>
+            </div>
+
+            {/* =============================== BIOIMPEDÂNCIA (HISTÓRICO) =============================== */}
+            <div className="card mb-3" style={{ border: '1px solid var(--primary)', position: 'relative', background: 'rgba(226, 0, 122, 0.03)' }}>
+                <div style={{ padding: '5px 0' }}>
+                  <h2 style={{ color: 'var(--primary)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '1.5rem' }}>📊</span> Bioimpedância Técnica (Histórico)
+                  </h2>
+                </div>
+                
+                <div style={{ padding: '15px 0', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '20px' }}>
+                  <div className="form-group mb-0">
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Sincronizar Novo Link da InBody/Avanutri</label>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="Cole o novo link do relatório aqui..." 
+                        value={bioLink || ''}
+                        onChange={e => setBioLink(e.target.value)}
+                        style={{ background: 'rgba(0,0,0,0.2)' }}
+                      />
+                      <button type="button" className="btn btn-primary" onClick={onImportBio} style={{ whiteSpace: 'nowrap' }}>Sincronizar</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bio-history-list">
+                  {!form.bioimpedancia_json || form.bioimpedancia_json.length === 0 ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.1)', borderRadius: '10px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      <div style={{ fontSize: '2rem', marginBottom: '10px' }}>📥</div>
+                      Nenhum relatório sincronizado. Cole o link acima para começar o histórico.
+                    </div>
+                  ) : (
+                    form.bioimpedancia_json.map((item, index) => (
+                      <div key={item.id || index} className="card mb-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.1)', padding: '0px', overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', 
+                            padding: '12px 15px', background: isBioOpen(item.id || index) ? 'rgba(226, 0, 122, 0.1)' : 'transparent',
+                            borderBottom: isBioOpen(item.id || index) ? '1px solid rgba(255,255,255,0.1)' : 'none'
+                          }}
+                          onClick={() => setIsBioOpen(item.id || index)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                              📅 {new Date(item.date).toLocaleDateString('pt-BR')} {new Date(item.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {index === 0 && <span style={{ fontSize: '0.7rem', background: 'var(--primary)', color: '#fff', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>MAIS RECENTE</span>}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <button 
+                              type="button" 
+                              className="btn btn-sm btn-outline" 
+                              style={{ padding: '2px 8px', fontSize: '0.75rem', borderColor: '#f44336', color: '#f44336' }}
+                              onClick={(e) => { e.stopPropagation(); if(window.confirm('Excluir este registro do histórico?')) onChange('bioimpedancia_json', form.bioimpedancia_json.filter((_, i) => i !== index)); }}
+                            >
+                              🗑️
+                            </button>
+                            <span style={{ fontSize: '1rem', transition: 'transform 0.3s', transform: isBioOpen(item.id || index) ? 'rotate(180deg)' : 'rotate(0)' }}>▼</span>
+                          </div>
+                        </div>
+                        
+                        {isBioOpen(item.id || index) && (
+                          <div className="fade-in" style={{ padding: '20px' }}>
+                            <BioimpedanciaReport data={item.data} />
+                            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                              <button 
+                                type="button" 
+                                className="btn btn-outline btn-sm"
+                                onClick={(e) => { e.stopPropagation(); window.print(); }}
+                              >
+                                🖨️ Imprimir Este Relatório
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
             </div>
 
@@ -251,7 +336,8 @@ function Anamnese() {
     const [editMode, setEditMode] = useState(false);
     const [editForm, setEditForm] = useState({});
     const [createMode, setCreateMode] = useState(null);
-    const [newForm, setNewForm] = useState({ ...initialAnamnese });
+    const [expandedBios, setExpandedBios] = useState(new Set());
+    const [bioLink, setBioLink] = useState('');
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState('');
     const printRef = useRef();
@@ -284,10 +370,31 @@ function Anamnese() {
                 try { if (d.historico_familiar) Object.assign(d, JSON.parse(d.historico_familiar)); } catch (e) { }
                 try { if (d.objetivos) Object.assign(d, JSON.parse(d.objetivos)); } catch (e) { }
                 try { if (d.habitos) Object.assign(d, JSON.parse(d.habitos)); } catch (e) { }
+                
+                if (d.bioimpedancia_json && typeof d.bioimpedancia_json === 'string') {
+                    try { 
+                        let parsed = JSON.parse(d.bioimpedancia_json); 
+                        // MIGRATION: Convert old single object to array
+                        if (parsed && !Array.isArray(parsed)) {
+                            parsed = [{ id: 'legacy-' + Date.now(), date: d.created_at || new Date().toISOString(), data: parsed }];
+                        }
+                        d.bioimpedancia_json = parsed || [];
+                    } catch(e) { d.bioimpedancia_json = []; }
+                } else if (!d.bioimpedancia_json) {
+                    d.bioimpedancia_json = [];
+                }
+                
                 setViewItem(d);
                 setEditForm(d);
                 setEditMode(false);
                 setCreateMode(null);
+                setBioLink('');
+                // Expand the most recent by default if exists
+                if (d.bioimpedancia_json.length > 0) {
+                    setExpandedBios(new Set([d.bioimpedancia_json[0].id || 0]));
+                } else {
+                    setExpandedBios(new Set());
+                }
             }
         } catch (e) {
             console.error('Erro visualização:', e.response?.data || e);
@@ -320,8 +427,8 @@ function Anamnese() {
                 'pratica_atividade', 'atividade_qual', 'frequentou_academia', 'academia_tempo',
                 'nivel_atividade', 'tempo_objetivo',
                 'sofreu_lesoes', 'lesoes_qual', 'passou_cirurgias', 'cirurgias_qual',
-                'ultimo_ciclo', 'menopausa', 'menopausa_desde', 'info_adicionais']
-                .map(f => [f, form[f]])
+                'ultimo_ciclo', 'menopausa', 'menopausa_desde', 'info_adicionais', 'bioimpedancia_json']
+                .map(f => [f, f === 'bioimpedancia_json' ? JSON.stringify(form[f]) : form[f]])
         ),
         historico_familiar: JSON.stringify({
             fam_hipertensao: form.fam_hipertensao, fam_hipertensao_quem: form.fam_hipertensao_quem,
@@ -341,6 +448,53 @@ function Anamnese() {
             horas_sono: form.horas_sono,
         }),
     });
+
+    const handleImportBio = (setter) => async () => {
+        if (!bioLink) {
+            alert('Por favor, cole o link da bioimpedância primeiro.');
+            return;
+        }
+
+        const match = bioLink.match(/[#\/]([a-f0-9-]{36})/i);
+        if (!match) {
+            alert('Link inválido. Verifique se o link contém o código do relatório.');
+            return;
+        }
+
+        const uuid = match[1];
+        setLoading(true);
+        try {
+            const res = await api.get(`/importar-bio/${uuid}`);
+            const newRecord = {
+                id: 'bio-' + Date.now(),
+                date: new Date().toISOString(),
+                data: res.data
+            };
+            setter(prev => ({ 
+                ...prev, 
+                bioimpedancia_json: [newRecord, ...(Array.isArray(prev.bioimpedancia_json) ? prev.bioimpedancia_json : [])] 
+            }));
+            toggleBio(newRecord.id);
+            setBioLink('');
+            alert('Dados da bioimpedância sincronizados com sucesso!');
+        } catch (error) {
+            console.error('Erro detalhado:', error.response?.data || error);
+            const msg = error.response?.data?.error || 'Verifique o link e tente novamente.';
+            alert(`Erro ao importar bioimpedância: ${msg}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const isBioOpen = (idOrIndex) => expandedBios.has(idOrIndex);
+    const toggleBio = (idOrIndex) => {
+        setExpandedBios(prev => {
+            const next = new Set(prev);
+            if (next.has(idOrIndex)) next.delete(idOrIndex);
+            else next.add(idOrIndex);
+            return next;
+        });
+    };
 
     const saveEdit = async () => {
         setSaving(true);
@@ -430,6 +584,8 @@ function Anamnese() {
     if (createMode) {
         return <AnamneseForm form={newForm} onChange={handleAnamnese(setNewForm)}
             onSave={createAnamnese} onCancel={() => { setCreateMode(null); setNewForm({ ...initialAnamnese }); }}
+            onImportBio={handleImportBio(setNewForm)} bioLink={bioLink} setBioLink={setBioLink}
+            isBioOpen={isBioOpen} setIsBioOpen={toggleBio}
             title={`Nova Anamnese: ${createMode.nome}`} saving={saving} />;
     }
 
@@ -437,6 +593,8 @@ function Anamnese() {
     if (viewItem && editMode) {
         return <AnamneseForm form={editForm} onChange={handleAnamnese(setEditForm)}
             onSave={saveEdit} onCancel={() => { setEditMode(false); }}
+            onImportBio={handleImportBio(setEditForm)} bioLink={bioLink} setBioLink={setBioLink}
+            isBioOpen={isBioOpen} setIsBioOpen={toggleBio}
             title={`Editar: ${editForm.nome}`} saving={saving} />;
     }
 
@@ -538,6 +696,22 @@ function Anamnese() {
                         <div className="card mb-3">
                             <h2 style={{ color: 'var(--primary)', marginBottom: '0.75rem' }}>📝 Informações Adicionais</h2>
                             <p style={{ fontSize: '0.95rem', whiteSpace: 'pre-wrap' }}>{d.info_adicionais}</p>
+                        </div>
+                    )}
+
+                    {d.bioimpedancia_json && Array.isArray(d.bioimpedancia_json) && d.bioimpedancia_json.length > 0 && (
+                        <div className="card mb-3" style={{ border: '1px solid var(--primary)', background: 'rgba(226, 0, 122, 0.05)' }}>
+                            <h2 style={{ color: 'var(--primary)', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '1.5rem' }}>📊</span> Histórico de Bioimpedâncias
+                            </h2>
+                            {d.bioimpedancia_json.map((item, idx) => (
+                                <div key={item.id || idx} style={{ marginBottom: idx === d.bioimpedancia_json.length - 1 ? 0 : '30px', paddingBottom: idx === d.bioimpedancia_json.length - 1 ? 0 : '30px', borderBottom: idx === d.bioimpedancia_json.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.1)' }}>
+                                    <h3 style={{ fontSize: '1rem', color: 'var(--primary)', marginBottom: '15px' }}>
+                                        📅 Avaliação em: {new Date(item.date).toLocaleDateString('pt-BR')} {new Date(item.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </h3>
+                                    <BioimpedanciaReport data={item.data} />
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

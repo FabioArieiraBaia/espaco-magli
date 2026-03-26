@@ -18,7 +18,7 @@ function Financeiro() {
   });
   const [showModal, setShowModal] = useState(false);
   const [novaDespesa, setNovaDespesa] = useState({ descricao: '', valor: '' });
-  const [pagamentoModal, setPagamentoModal] = useState({ show: false, receitaId: null, meio: 'Dinheiro' });
+  const [pagamentoModal, setPagamentoModal] = useState({ show: false, receitaId: null, meio: 'Dinheiro', tipo: 'cnpj' });
 
   useEffect(() => {
     if (!api) return;
@@ -45,8 +45,11 @@ function Financeiro() {
   const confirmarPagamento = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`/receitas/${pagamentoModal.receitaId}/pago`, { meio_pagamento: pagamentoModal.meio });
-      setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro' });
+      await api.post(`/receitas/${pagamentoModal.receitaId}/pago`, { 
+        meio_pagamento: pagamentoModal.meio,
+        tipo_conta: pagamentoModal.tipo
+      });
+      setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro', tipo: 'cnpj' });
       loadData();
     } catch (error) {
       console.error('Erro:', error);
@@ -129,6 +132,9 @@ function Financeiro() {
 
   // KPI Calculations
   const receitasPagas = receitas.filter(r => r.pago).reduce((acc, r) => acc + Math.max(0, r.valor - (r.aluna_desconto || 0)), 0);
+  const receitasCNPJ = receitas.filter(r => r.pago && r.tipo_conta === 'cnpj').reduce((acc, r) => acc + Math.max(0, r.valor - (r.aluna_desconto || 0)), 0);
+  const receitasPersonal = receitas.filter(r => r.pago && r.tipo_conta === 'personal').reduce((acc, r) => acc + Math.max(0, r.valor - (r.aluna_desconto || 0)), 0);
+  
   const receitasPendentes = totalReceitas - receitasPagas;
   const saldoLiquido = receitasPagas - totalDespesas;
 
@@ -181,9 +187,20 @@ function Financeiro() {
         <div className="stat-card fade-in" style={{ animationDelay: '0.2s', background: 'rgba(76, 175, 80, 0.05)' }}>
           <h3>Receitas Pagas</h3>
           <p className="stat-value" style={{ color: '#4CAF50' }}>{formatValor(receitasPagas)}</p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginTop: '10px' }}>
-            <span style={{ color: '#e2007a' }}>Pendente: {formatValor(receitasPendentes)}</span>
-            <span style={{ color: 'var(--text-muted)' }}>Projeção Total: {formatValor(totalReceitas)}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.85rem', marginTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>🏢 Academia (CNPJ):</span>
+              <span style={{ fontWeight: 600 }}>{formatValor(receitasCNPJ)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>👩‍🏫 Personal (CPF):</span>
+              <span style={{ fontWeight: 600 }}>{formatValor(receitasPersonal)}</span>
+            </div>
+            <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '5px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#e2007a' }}>Pendente:</span>
+              <span>{formatValor(receitasPendentes)}</span>
+            </div>
           </div>
         </div>
         <div className="stat-card fade-in" style={{ animationDelay: '0.3s', background: 'rgba(244, 67, 54, 0.05)' }}>
@@ -248,9 +265,9 @@ function Financeiro() {
                             {r.pago ? '✓ Pago' : '⏳ Pendente'}
                           </div>
                           {getBadgeVencimento(r.aluna_vencimento, r.pago)}
-                          {r.pago && r.meio_pagamento && (
+                          {r.pago && (
                             <div style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--text-muted)' }}>
-                              Via {r.meio_pagamento}
+                              Via {r.meio_pagamento || 'Dinheiro'} • {r.tipo_conta === 'personal' ? '👤 Personal' : '🏢 Academia'}
                             </div>
                           )}
                         </td>
@@ -404,14 +421,14 @@ function Financeiro() {
 
           {/* Modal Receber Pagamento */}
           {pagamentoModal.show && (
-            <div className="modal-overlay" onClick={() => setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro' })}>
+            <div className="modal-overlay" onClick={() => setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro', tipo: 'cnpj' })}>
               <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
                 <div className="modal-header">
                   <h3>Confirmar Pagamento</h3>
-                  <button className="modal-close" onClick={() => setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro' })}>×</button>
+                  <button className="modal-close" onClick={() => setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro', tipo: 'cnpj' })}>×</button>
                 </div>
                 <form onSubmit={confirmarPagamento}>
-                  <div className="form-group">
+                  <div className="form-group mb-3">
                     <label className="required">Meio de Pagamento</label>
                     <select
                       className="form-control"
@@ -425,9 +442,34 @@ function Financeiro() {
                       <option value="Transferência">Transferência Bancária</option>
                     </select>
                   </div>
+
+                  <div className="form-group">
+                    <label className="required">Conta de Destino</label>
+                    <div className="flex gap-2 mt-2">
+                       <label className="flex ai-center gap-1" style={{ cursor: 'pointer' }}>
+                          <input 
+                            type="radio" 
+                            name="tipo_conta" 
+                            checked={pagamentoModal.tipo === 'cnpj'} 
+                            onChange={() => setPagamentoModal({...pagamentoModal, tipo: 'cnpj'})}
+                          />
+                          🏢 Academia (CNPJ)
+                       </label>
+                       <label className="flex ai-center gap-1" style={{ cursor: 'pointer' }}>
+                          <input 
+                            type="radio" 
+                            name="tipo_conta" 
+                            checked={pagamentoModal.tipo === 'personal'} 
+                            onChange={() => setPagamentoModal({...pagamentoModal, tipo: 'personal'})}
+                          />
+                          👤 Personal (CPF)
+                       </label>
+                    </div>
+                  </div>
+
                   <div className="flex gap-2 mt-4">
                     <button type="submit" className="btn btn-primary">Confirmar Recebimento</button>
-                    <button type="button" className="btn btn-outline" onClick={() => setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro' })}>
+                    <button type="button" className="btn btn-outline" onClick={() => setPagamentoModal({ show: false, receitaId: null, meio: 'Dinheiro', tipo: 'cnpj' })}>
                       Cancelar
                     </button>
                   </div>

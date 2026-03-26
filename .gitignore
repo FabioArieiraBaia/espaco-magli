@@ -1,11 +1,16 @@
 # Dependencies
 node_modules/
+**/node_modules/
 
 # Production builds
 frontend/build/
 production_*/
-espacomagli.zip
-magli.zip
+*.zip
+
+# Database (keep schema, ignore local data)
+api/database/magli.db
+api/database/*.db-journal
+api/database/*.db-wal
 
 # Environment variables
 .env
@@ -31,11 +36,6 @@ yarn-error.log*
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Database (keep schema, ignore local data)
-api/database/magli.db
-api/database/*.db-journal
-api/database/*.db-wal
 
 # PHP storage/uploads (optional, depends if you want to keep existing uploads)
 api/uploads/*

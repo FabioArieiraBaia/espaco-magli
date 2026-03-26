@@ -5,36 +5,19 @@ class Database {
     private $pdo;
     
     private function __construct() {
-        // No servidor de produção o banco está na raiz
-        $rootDb = dirname(dirname(__DIR__)) . '/magli.db';
-        $apiDb  = dirname(__DIR__) . '/database/magli.db';
+        $dbPath = dirname(__DIR__) . '/database/magli.db';
+        $dir = dirname($dbPath);
         
-        if (file_exists($rootDb)) {
-            $dbPath = $rootDb;
-        } else {
-            $dbPath = $apiDb;
-            $dir = dirname($dbPath);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
         }
         
         $this->pdo = new PDO('sqlite:' . $dbPath);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
         
-        try {
-            $this->createTables();
-            $this->runMigrations();
-        } catch (\PDOException $e) {
-            http_response_code(500);
-            header('Content-Type: application/json');
-            echo json_encode([
-                'error' => 'Database initialization error',
-                'description' => $e->getMessage()
-            ]);
-            exit;
-        }
+        $this->createTables();
+        $this->runMigrations();
     }
     
     public static function getInstance() {
@@ -76,8 +59,6 @@ class Database {
                 data_inicio DATE,
                 dias_semana TEXT,
                 horarios TEXT,
-                data_vencimento DATE,
-                desconto REAL DEFAULT 0,
                 ativa INTEGER DEFAULT 1,
                 criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (professora_id) REFERENCES usuarios(id)
@@ -206,7 +187,6 @@ class Database {
             $this->pdo->exec("INSERT INTO configuracoes (chave, valor) VALUES ('preco_2x', '150')");
             $this->pdo->exec("INSERT INTO configuracoes (chave, valor) VALUES ('preco_3x', '180')");
             $this->pdo->exec("INSERT INTO configuracoes (chave, valor) VALUES ('preco_4x', '220')");
-            $this->pdo->exec("INSERT INTO configuracoes (chave, valor) VALUES ('preco_5x', '260')");
         }
     }
 
@@ -217,66 +197,6 @@ class Database {
         } catch (PDOException $e) {
             $this->pdo->exec("ALTER TABLE treinos ADD COLUMN duracao_semanas INTEGER DEFAULT 8");
             $this->pdo->exec("ALTER TABLE treinos ADD COLUMN descricao_treino TEXT DEFAULT ''");
-        }
-
-        // Adicionar imagem_treino na tabela treinos
-        try {
-            $this->pdo->query("SELECT imagem_treino FROM treinos LIMIT 1");
-        } catch (PDOException $e) {
-            $this->pdo->exec("ALTER TABLE treinos ADD COLUMN imagem_treino TEXT DEFAULT NULL");
-        }
-
-        // Adicionar colunas novas à tabela alunas se não existirem
-        try {
-            $this->pdo->query("SELECT data_vencimento FROM alunas LIMIT 1");
-        } catch (PDOException $e) {
-            $this->pdo->exec("ALTER TABLE alunas ADD COLUMN data_vencimento DATE");
-            $this->pdo->exec("ALTER TABLE alunas ADD COLUMN desconto REAL DEFAULT 0");
-        }
-
-        // Adicionar meio_pagamento na tabela receitas
-        try {
-            $this->pdo->query("SELECT meio_pagamento FROM receitas LIMIT 1");
-        } catch (PDOException $e) {
-            $this->pdo->exec("ALTER TABLE receitas ADD COLUMN meio_pagamento TEXT DEFAULT NULL");
-        }
-
-        // Adicionar tipo_conta na tabela receitas
-        try {
-            $this->pdo->query("SELECT tipo_conta FROM receitas LIMIT 1");
-        } catch (PDOException $e) {
-            $this->pdo->exec("ALTER TABLE receitas ADD COLUMN tipo_conta TEXT DEFAULT 'cnpj'");
-        }
-
-        // Migração Agressiva para Anamnese (Resolve 500 Errors no HostGator)
-        // Se a tabela já existir mas estiver com formato desatualizado (faltando novas colunas), 
-        // ela precisa ser dropada e recriada, já que versões anteriores nem funcionavam direito.
-        try {
-            $stmt = $this->pdo->query("PRAGMA table_info(anamnese)");
-            $columns = $stmt->fetchAll();
-            if (!empty($columns)) {
-                $colNames = array_column($columns, 'name');
-                $expectedCols = ['nome', 'nascimento', 'idade', 'email', 'telefone', 'peso', 'imc', 'info_adicionais', 'ultimo_ciclo'];
-                $missingCols = false;
-                
-                foreach ($expectedCols as $ec) {
-                    if (!in_array($ec, $colNames)) {
-                        $missingCols = true;
-                        break;
-                    }
-                }
-                
-                if ($missingCols) {
-                    $this->pdo->exec("DROP TABLE IF EXISTS anamnese");
-                }
-            }
-        } catch (PDOException $e) {}
-
-        // Migração para bioimpedancia_json
-        try {
-            $this->pdo->query("SELECT bioimpedancia_json FROM anamnese LIMIT 1");
-        } catch (PDOException $e) {
-            $this->pdo->exec("ALTER TABLE anamnese ADD COLUMN bioimpedancia_json TEXT DEFAULT NULL");
         }
 
         // Criar tabela anamnese se não existir (migração para BDs existentes)

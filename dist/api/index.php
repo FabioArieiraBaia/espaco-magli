@@ -11,52 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// Servir arquivos estáticos da pasta uploads (Imagens de Treino)
-$requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-if (preg_match('/^\/uploads\/(.+)$/', $requestPath, $matches)) {
-    $filePath = __DIR__ . '/uploads/' . $matches[1];
-    
-    if (file_exists($filePath) && !is_dir($filePath)) {
-        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        $mimeTypes = [
-            'jpg'  => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'png'  => 'image/png',
-            'gif'  => 'image/gif',
-            'webp' => 'image/webp'
-        ];
-        
-        $contentType = $mimeTypes[$ext] ?? 'application/octet-stream';
-        
-        if (ob_get_level()) ob_end_clean();
-        header('Content-Type: ' . $contentType);
-        header('Content-Length: ' . filesize($filePath));
-        header('Access-Control-Allow-Origin: *'); // Garantir CORS para imagens se necessário
-        readfile($filePath);
-        exit;
-    }
-}
-
-// Polyfill para getallheaders se não existir (necessário em alguns ambientes FastCGI/Nginx)
-if (!function_exists('getallheaders')) {
-    function getallheaders() {
-        $headers = [];
-        foreach ($_SERVER as $name => $value) {
-            if (substr($name, 0, 5) == 'HTTP_') {
-                $headers[str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))))] = $value;
-            } elseif ($name == 'CONTENT_TYPE') {
-                $headers['Content-Type'] = $value;
-            } elseif ($name == 'CONTENT_LENGTH') {
-                $headers['Content-Length'] = $value;
-            }
-        }
-        return $headers;
-    }
-}
-
 require_once __DIR__ . '/config/database.php';
 
-try {
 $pdo = Database::getInstance();
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -239,41 +195,6 @@ if ($uri === '/restore' && $method === 'POST') {
     }
 }
 
-// ROTA: Importar Bioimpedância (Proxy)
-if ($method === 'GET' && preg_match('/^\/importar-bio\/([a-zA-Z0-9-]+)$/', $uri, $matches)) {
-    $uuid = $matches[1];
-    $url = "https://balancaapi.avanutrionline.com/Relatorio/" . $uuid;
-    
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false, // Compatibilidade com XAMPP sem certificados
-        CURLOPT_HTTPHEADER => [
-            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept: application/json"
-        ]
-    ]);
-    
-    $data = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if ($data === false || $httpCode !== 200) {
-        jsonResponse([
-            'error' => 'Falha ao buscar dados do relatório',
-            'http_code' => $httpCode,
-            'curl_error' => $error
-        ], 500);
-    }
-    
-    header('Content-Type: application/json');
-    echo $data;
-    exit;
-}
-
 // ROTA: CRUD Alunas
 if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
     $user = getAuthUser($pdo);
@@ -293,16 +214,7 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
             }
             jsonResponse($aluna ?: ['error' => 'Aluna não encontrada'], $aluna ? 200 : 404);
         } else {
-            $mesAtual = date('Y-m');
-            $stmt = $pdo->prepare("
-                SELECT a.*, u.nome as professora_nome,
-                (SELECT COUNT(*) FROM receitas r WHERE r.aluna_id = a.id AND r.mes = ? AND r.pago = 1) as pago_mes_atual
-                FROM alunas a 
-                LEFT JOIN usuarios u ON a.professora_id = u.id 
-                WHERE a.ativa = 1 
-                ORDER BY a.nome
-            ");
-            $stmt->execute([$mesAtual]);
+            $stmt = $pdo->query("SELECT a.*, u.nome as professora_nome FROM alunas a LEFT JOIN usuarios u ON a.professora_id = u.id WHERE a.ativa = 1 ORDER BY a.nome");
             $alunas = $stmt->fetchAll();
             foreach ($alunas as &$a) {
                 $a['dias_semana'] = json_decode($a['dias_semana'] ?? '[]', true);
@@ -317,8 +229,8 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
         $input = getInput();
         
         $stmt = $pdo->prepare("
-            INSERT INTO alunas (nome, nascimento, email, cpf, telefone, professora_id, vezes_semana, data_inicio, dias_semana, horarios, data_vencimento, desconto)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO alunas (nome, nascimento, email, cpf, telefone, professora_id, vezes_semana, data_inicio, dias_semana, horarios)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         $stmt->execute([
@@ -331,9 +243,7 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
             $input['vezes_semana'],
             $input['data_inicio'],
             json_encode($input['dias_semana'] ?? []),
-            json_encode($input['horarios'] ?? []),
-            $input['data_vencimento'] ?? null,
-            isset($input['desconto']) ? floatval($input['desconto']) : 0
+            json_encode($input['horarios'] ?? [])
         ]);
         
         $alunaId = $pdo->lastInsertId();
@@ -360,7 +270,7 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
         $stmtPreco = $pdo->prepare("SELECT valor FROM configuracoes WHERE chave = ?");
         $stmtPreco->execute(['preco_' . $input['vezes_semana'] . 'x']);
         $precoConfig = $stmtPreco->fetch();
-        $valorBase = $precoConfig ? floatval($precoConfig['valor']) : 0;
+        $valor = $precoConfig ? floatval($precoConfig['valor']) : 0;
         
         $stmtReceita = $pdo->prepare("
             INSERT INTO receitas (aluna_id, valor, vezes_semana, mes)
@@ -368,7 +278,7 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
         ");
         $stmtReceita->execute([
             $alunaId,
-            $valorBase,
+            $valor,
             $input['vezes_semana'],
             date('Y-m')
         ]);
@@ -382,8 +292,7 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
         
         $stmt = $pdo->prepare("
             UPDATE alunas SET nome = ?, nascimento = ?, email = ?, cpf = ?, telefone = ?, 
-            professora_id = ?, vezes_semana = ?, data_inicio = ?, dias_semana = ?, horarios = ?,
-            data_vencimento = ?, desconto = ?
+            professora_id = ?, vezes_semana = ?, data_inicio = ?, dias_semana = ?, horarios = ?
             WHERE id = ?
         ");
         
@@ -398,8 +307,6 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
             $input['data_inicio'],
             json_encode($input['dias_semana'] ?? []),
             json_encode($input['horarios'] ?? []),
-            $input['data_vencimento'] ?? null,
-            isset($input['desconto']) ? floatval($input['desconto']) : 0,
             $id
         ]);
         
@@ -427,41 +334,6 @@ if (preg_match('/^\/alunas(\/(\d+))?$/', $uri, $matches)) {
         
         jsonResponse(['success' => true]);
     }
-
-}
-
-
-// POST - Upload de foto do treino
-if ($method === 'POST' && preg_match('/^\/treinos\/(\d+)\/foto$/', $uri, $matches)) {
-    $user = getAuthUser($pdo);
-    if (!$user) jsonResponse(['error' => 'Não autorizado'], 401);
-    
-    $id = $matches[1];
-    if (!isset($_FILES['foto'])) {
-        jsonResponse(['error' => 'Nenhuma imagem enviada'], 400);
-    }
-    
-    $file = $_FILES['foto'];
-    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowed = ['jpg', 'jpeg', 'png'];
-    
-    if (!in_array($ext, $allowed)) {
-        jsonResponse(['error' => 'Formato não suportado. Use JPG, JPEG ou PNG.'], 400);
-    }
-    
-    $uploadDir = __DIR__ . '/uploads/treinos/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-    
-    $fileName = 'treino_' . $id . '_' . time() . '.' . $ext;
-    $targetPath = $uploadDir . $fileName;
-    
-    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-        $stmt = $pdo->prepare("UPDATE treinos SET imagem_treino = ? WHERE id = ?");
-        $stmt->execute([$fileName, $id]);
-        jsonResponse(['success' => true, 'path' => $fileName]);
-    } else {
-        jsonResponse(['error' => 'Falha ao salvar arquivo'], 500);
-    }
 }
 
 // ROTA: Treinos
@@ -474,9 +346,6 @@ if (preg_match('/^\/treinos(\/(\d+))?$/', $uri, $matches)) {
     // GET - Listar
     if ($method === 'GET') {
         if ($id) {
-            // Auto-concluir treinos passados
-            $pdo->prepare("UPDATE treinos SET status = 'concluido' WHERE aluna_id = ? AND status = 'pendente' AND data_proxima < ?")->execute([$id, date('Y-m-d')]);
-
             // Treinos de uma aluna específica
             $stmt = $pdo->prepare("
                 SELECT t.*, a.nome as aluna_nome, u.nome as professora_nome
@@ -489,9 +358,6 @@ if (preg_match('/^\/treinos(\/(\d+))?$/', $uri, $matches)) {
             $stmt->execute([$id]);
             jsonResponse($stmt->fetchAll());
         } else {
-            // Auto-concluir treinos passados geral
-            $pdo->prepare("UPDATE treinos SET status = 'concluido' WHERE status = 'pendente' AND data_proxima < ?")->execute([date('Y-m-d')]);
-
             // Todos os treinos (admin)
             $stmt = $pdo->query("
                 SELECT t.*, a.nome as aluna_nome, u.nome as professora_nome
@@ -514,18 +380,10 @@ if (preg_match('/^\/treinos(\/(\d+))?$/', $uri, $matches)) {
         $ultimo = $stmt->fetch()['ultimo'] ?? 0;
         
         $novoNum = $ultimo + 1;
+        $duracaoSemanas = $input['duracao_semanas'] ?? 8;
         $dataTreino = new DateTime($input['data_treino']);
-        
-        if (isset($input['data_proxima']) && !empty($input['data_proxima'])) {
-            $dataProxima = new DateTime($input['data_proxima']);
-            // Se data manual, calcular quantas semanas isso representa
-            $diff = $dataTreino->diff($dataProxima);
-            $duracaoSemanas = ceil($diff->days / 7);
-        } else {
-            $duracaoSemanas = isset($input['duracao_semanas']) ? (int)$input['duracao_semanas'] : 8;
-            $dataProxima = clone $dataTreino;
-            $dataProxima->modify('+' . ($duracaoSemanas * 7) . ' days');
-        }
+        $dataProxima = clone $dataTreino;
+        $dataProxima->modify('+' . ($duracaoSemanas * 7) . ' days');
         
         $stmt = $pdo->prepare("
             INSERT INTO treinos (aluna_id, professor_id, treino_num, data_treino, data_proxima, duracao_semanas, descricao_treino)
@@ -548,26 +406,17 @@ if (preg_match('/^\/treinos(\/(\d+))?$/', $uri, $matches)) {
     if ($method === 'PUT' && $id) {
         $input = getInput();
         
-        // Se tem duração ou data, recalcular data_proxima (ou aceitar data_proxima manual)
-        if (isset($input['data_treino']) || isset($input['duracao_semanas']) || isset($input['data_proxima'])) {
+        // Se tem duração ou data, recalcular data_proxima
+        if (isset($input['data_treino']) || isset($input['duracao_semanas'])) {
             // Buscar treino atual
             $stmt = $pdo->prepare("SELECT * FROM treinos WHERE id = ?");
             $stmt->execute([$id]);
             $treino = $stmt->fetch();
             
-            $dataTreinoStr = $input['data_treino'] ?? $treino['data_treino'];
-            $dataTreino = new DateTime($dataTreinoStr);
-            
-            if (isset($input['data_proxima']) && !empty($input['data_proxima'])) {
-                $dataProxima = new DateTime($input['data_proxima']);
-                // Se data manual, recalcular semanas para a ficha ficar correta
-                $diff = $dataTreino->diff($dataProxima);
-                $duracaoSemanas = ceil($diff->days / 7);
-            } else {
-                $duracaoSemanas = isset($input['duracao_semanas']) ? (int)$input['duracao_semanas'] : (int)($treino['duracao_semanas'] ?? 8);
-                $dataProxima = clone $dataTreino;
-                $dataProxima->modify('+' . ($duracaoSemanas * 7) . ' days');
-            }
+            $dataTreino = new DateTime($input['data_treino'] ?? $treino['data_treino']);
+            $duracaoSemanas = $input['duracao_semanas'] ?? $treino['duracao_semanas'] ?? 8;
+            $dataProxima = clone $dataTreino;
+            $dataProxima->modify('+' . ($duracaoSemanas * 7) . ' days');
             
             $stmt = $pdo->prepare("
                 UPDATE treinos SET 
@@ -594,18 +443,6 @@ if (preg_match('/^\/treinos(\/(\d+))?$/', $uri, $matches)) {
             $stmt->execute([$input['descricao_treino'], $id]);
         }
         
-        jsonResponse(['success' => true]);
-    }
-
-
-
-    // DELETE - Deletar treino
-    if ($method === 'DELETE' && $id) {
-        $user = getAuthUser($pdo);
-        if (!$user || $user['perfil'] !== 'admin') jsonResponse(['error' => 'Não autorizado'], 403);
-        
-        $stmt = $pdo->prepare("DELETE FROM treinos WHERE id = ?");
-        $stmt->execute([$id]);
         jsonResponse(['success' => true]);
     }
 }
@@ -699,22 +536,16 @@ if ($uri === '/receitas' && $method === 'GET') {
     $mes = $_GET['mes'] ?? date('Y-m');
     
     $stmt = $pdo->prepare("
-        SELECT r.*, a.nome as aluna_nome, a.desconto as aluna_desconto, a.data_vencimento as aluna_vencimento
+        SELECT r.*, a.nome as aluna_nome
         FROM receitas r
         JOIN alunas a ON r.aluna_id = a.id
         WHERE r.mes = ?
-        ORDER BY r.pago DESC, a.nome
+        ORDER BY a.nome
     ");
     $stmt->execute([$mes]);
     
     $receitas = $stmt->fetchAll();
-    
-    $total = 0;
-    foreach ($receitas as $r) {
-        $desconto = floatval($r['aluna_desconto'] ?? 0);
-        $valorBase = floatval($r['valor']);
-        $total += max(0, $valorBase - $desconto);
-    }
+    $total = array_sum(array_column($receitas, 'valor'));
     
     jsonResponse(['receitas' => $receitas, 'total' => $total]);
 }
@@ -728,38 +559,9 @@ if (preg_match('/^\/receitas\/(\d+)\/pago$/', $uri, $matches)) {
     
     $id = $matches[1];
     $input = getInput();
-    $meioPagamento = $input['meio_pagamento'] ?? 'Dinheiro';
-    $tipoConta = $input['tipo_conta'] ?? 'cnpj'; // Padrão é CNPJ se não informado
     
-    $stmt = $pdo->prepare("UPDATE receitas SET pago = 1, data_pagamento = ?, meio_pagamento = ?, tipo_conta = ? WHERE id = ?");
-    $stmt->execute([date('Y-m-d'), $meioPagamento, $tipoConta, $id]);
-    
-    jsonResponse(['success' => true]);
-}
-
-// ROTA: Estornar Pagamento
-if (preg_match('/^\/receitas\/(\d+)\/estornar$/', $uri, $matches)) {
-    $user = getAuthUser($pdo);
-    if (!$user || $user['perfil'] !== 'admin') {
-        jsonResponse(['error' => 'Não autorizado'], 403);
-    }
-    
-    $id = $matches[1];
-    
-    $stmt = $pdo->prepare("UPDATE receitas SET pago = 0, data_pagamento = NULL, meio_pagamento = NULL WHERE id = ?");
-    $stmt->execute([$id]);
-    
-    jsonResponse(['success' => true]);
-}
-
-// ROTA: Deletar Pagamento (Receita)
-if (preg_match('/^\/receitas\/(\d+)$/', $uri, $matches) && $method === 'DELETE') {
-    $user = getAuthUser($pdo);
-    if (!$user || $user['perfil'] !== 'admin') jsonResponse(['error' => 'Não autorizado'], 403);
-    
-    $id = $matches[1];
-    $stmt = $pdo->prepare("DELETE FROM receitas WHERE id = ?");
-    $stmt->execute([$id]);
+    $stmt = $pdo->prepare("UPDATE receitas SET pago = 1, data_pagamento = ? WHERE id = ?");
+    $stmt->execute([date('Y-m-d'), $id]);
     
     jsonResponse(['success' => true]);
 }
@@ -896,33 +698,11 @@ if (preg_match('/^\/usuarios(\/(\d+))?$/', $uri, $matches)) {
         jsonResponse(['success' => true]);
     }
 
-    // DELETE - Deletar/Desativar usuário
+    // DELETE - Desativar usuário
     if ($method === 'DELETE' && $id) {
-        // Buscar status atual
-        $stmt = $pdo->prepare("SELECT ativo FROM usuarios WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE usuarios SET ativo = 0 WHERE id = ?");
         $stmt->execute([$id]);
-        $u = $stmt->fetch();
-        
-        if (!$u) jsonResponse(['error' => 'Usuário não encontrado'], 404);
-
-        if ($u['ativo']) {
-            // Se ativo, apenas desativa (lógica antiga)
-            $stmt = $pdo->prepare("UPDATE usuarios SET ativo = 0 WHERE id = ?");
-            $stmt->execute([$id]);
-            jsonResponse(['success' => true, 'message' => 'Membro desativado com sucesso']);
-        } else {
-            // Se já inativo, tenta excluir permanentemente
-            // Verificação de segurança: não pode excluir se tiver alunas vinculadas
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM alunas WHERE professora_id = ?");
-            $stmt->execute([$id]);
-            if ($stmt->fetchColumn() > 0) {
-                jsonResponse(['error' => 'Este membro possui alunas vinculadas. Troque a professora das alunas antes de excluir permanentemente.'], 400);
-            }
-            
-            $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id = ?");
-            $stmt->execute([$id]);
-            jsonResponse(['success' => true, 'message' => 'Membro excluído permanentemente']);
-        }
+        jsonResponse(['success' => true]);
     }
 }
 
@@ -964,7 +744,7 @@ if (preg_match('#^/anamnese(/(\d+))?$#', $uri, $matches)) {
             'frequentou_academia','academia_tempo','nivel_atividade',
             'objetivos','tempo_objetivo','habitos',
             'sofreu_lesoes','lesoes_qual','passou_cirurgias','cirurgias_qual',
-            'ultimo_ciclo','menopausa','menopausa_desde','info_adicionais', 'bioimpedancia_json'];
+            'ultimo_ciclo','menopausa','menopausa_desde','info_adicionais'];
         
         $placeholders = implode(',', array_fill(0, count($columns), '?'));
         $colNames = implode(',', $columns);
@@ -992,7 +772,7 @@ if (preg_match('#^/anamnese(/(\d+))?$#', $uri, $matches)) {
             'frequentou_academia','academia_tempo','nivel_atividade',
             'objetivos','tempo_objetivo','habitos',
             'sofreu_lesoes','lesoes_qual','passou_cirurgias','cirurgias_qual',
-            'ultimo_ciclo','menopausa','menopausa_desde','info_adicionais', 'bioimpedancia_json'];
+            'ultimo_ciclo','menopausa','menopausa_desde','info_adicionais'];
         
         $setClause = implode(',', array_map(function($col) { return "$col = ?"; }, $columns));
         $values = array_map(function($col) use ($input) { return $input[$col] ?? null; }, $columns);
@@ -1014,16 +794,4 @@ if (preg_match('#^/anamnese(/(\d+))?$#', $uri, $matches)) {
 
 // Rota não encontrada
 jsonResponse(['error' => 'Rota não encontrada'], 404);
-
-} catch (Throwable $e) {
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo json_encode([
-        'error' => 'Erro interno do servidor',
-        'message' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
-    ]);
-    exit;
-}
 ?>

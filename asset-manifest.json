@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/magli/static/css/main.4eab37e4.css",
+    "main.js": "/magli/static/js/main.107c76b1.js",
+    "index.html": "/magli/index.html",
+    "main.4eab37e4.css.map": "/magli/static/css/main.4eab37e4.css.map",
+    "main.107c76b1.js.map": "/magli/static/js/main.107c76b1.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.4eab37e4.css",
+    "static/js/main.107c76b1.js"
+  ]
+}

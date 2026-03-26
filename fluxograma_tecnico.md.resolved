@@ -1,0 +1,148 @@
+# Fluxograma Técnico: Arquitetura Espaço Magli
+
+Este documento apresenta o fluxo técnico e a arquitetura de dados do sistema, modelada sob a perspectiva de um Full Stack.
+
+---
+
+## 1. Topologia Macro (Frontend Client ↔ Backend API)
+
+A aplicação segue um modelo client-server restrito via API REST, com o Frontend servido estaticamente pelo Apache e o Backend processando rotas dinamicamente no PHP.
+
+```mermaid
+graph TD
+    Client[📱 Dispositivo Cliente (Browser / PWA)] --> |Navegação & UI| React[⚛️ React Frontend SPA]
+    
+    sublayer_Sync[Sincronização Offline]
+    React -.-> |Se Offline| IndexedDB[(🗃️ MagliOfflineDB - Cache Local)]
+    IndexedDB -.-> |Internet Restaurada| React
+    sublayer_Sync -.-> React
+
+    React --> |Req. HTTP + Token (Axios)| Apache[🌐 Servidor Web (Apache/HostGator)]
+    
+    Apache --> |.htaccess Routing| PHP_Front[Arquivos Estáticos /magli]
+    Apache --> |/api Routing| PHP_API[⚙️ Backend PHP Index.php]
+    
+    PHP_API --> |Auth & JWT Fake| Auth[🔐 Validador de Token]
+    PHP_API --> |PDO Connector| SQLite[(🗄️ magli_database.db)]
+```
+
+---
+
+## 2. Fluxo de Autenticação e Autorização
+
+O sistema exige login para rotas não públicas. Abaixo está o ciclo de vida da sessão:
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 Usuário
+    participant React as ⚛️ Frontend
+    participant PHP as ⚙️ Backend (API)
+    participant DB as 🗄️ SQLite
+
+    User->>React: Preenche Email/Senha em /admin
+    React->>PHP: POST /api/login {email, senha}
+    PHP->>DB: SELECT * FROM usuarios WHERE email=?
+    DB-->>PHP: Retorna Hash BCRYPT
+    PHP->>PHP: password_verify(senha, hash)
+    
+    alt Credenciais Inválidas
+        PHP-->>React: 401 Unauthorized
+        React-->>User: Mensagem de Erro
+    else Credenciais Válidas
+        PHP->>PHP: Gera Token (Base64 Encode)
+        PHP-->>React: 200 OK + {token, user_data}
+        React->>React: Salva Token no LocalStorage
+        React-->>User: Redireciona p/ /admin/dashboard
+    end
+```
+
+---
+
+## 3. Modelo Relacional Entidade-Dado (Banco de Dados)
+
+Estrutura fundamental que une as tabelas no SQLite. Note a forte ligação (FK) entre a aluna, quem a treina, e seus históricos operacionais.
+
+```mermaid
+erDiagram
+    CONFIGURACOES {
+        int id PK
+        string chave "UNIQUE"
+        string valor
+    }
+    USUARIOS {
+        int id PK
+        string nome
+        string email "UNIQUE"
+        string senha "Hash BCRYPT"
+        string perfil "admin, professora"
+        boolean ativo
+    }
+    ALUNAS {
+        int id PK
+        string nome
+        string email
+        string whatsapp
+        string plano
+        int professora_id FK "Vincula ao Usuario"
+        boolean ativa
+        date data_matricula
+    }
+    FICHA_CADASTRAL {
+        int id PK
+        int aluna_id FK
+        text objetivo
+        text limitacoes
+        date data_avaliacao
+        decimal peso
+    }
+    TREINOS {
+        int id PK
+        int aluna_id FK
+        int professor_id FK
+        int treino_num
+        text descricao_treino
+        date data_treino
+        int duracao_semanas
+        date data_proxima
+        string status "Pendente, Concluido"
+    }
+
+    USUARIOS ||--o{ ALUNAS : "Responsável por"
+    ALUNAS ||--o| FICHA_CADASTRAL : "Possui 1"
+    ALUNAS ||--o{ TREINOS : "Realiza"
+    USUARIOS ||--o{ TREINOS : "Prescreve"
+```
+
+---
+
+## 4. Fluxo de Tratamento "PWA Offline Sync"
+
+Fluxograma vital que garante 0% de perda de dados e fluidez na sala de treinamento celular.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Online
+    
+    Online --> Offline : Queda de Conexão (Evento 'offline')
+    
+    state Offline {
+        [*] --> SalvaLocal
+        SalvaLocal --> GravaDB : Cria/Edita Aluna ou Treino
+        GravaDB --> MantemEspera : POST/PUT/DELETE \nsalvo no IndexedDB
+    }
+    
+    Offline --> Sincronizando : Restauro de Conexão (Evento 'online')
+    
+    state Sincronizando {
+        [*] --> LerRequests : /utils/offlineSync.js
+        LerRequests --> DisparaAxios : Para cada Req pendente
+        DisparaAxios --> DeletaDB : Se Status 200 OK
+        DeletaDB --> [*]
+    }
+    
+    Sincronizando --> Online : Sinc. Concluída \n(Auto Reload)
+```
+
+---
+
+*Este é o coração técnico da aplicação, gerando estabilidade e controle sem servidor central MySQL, reduzindo peso e alavancando manutenibilidade.*

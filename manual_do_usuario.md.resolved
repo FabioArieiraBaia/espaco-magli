@@ -1,0 +1,52 @@
+# Manual do Usuário: Magli Admin
+
+Este guia prático foi criado para você, **Daiane**, e sua equipe de professoras operarem o sistema financeiro, logístico e prático da academia com total facilidade no dia a dia.
+
+---
+
+## 1. Login e Acessos
+Para acessar, vá direto pelo botão flutuante instalado no seu celular, tablet, computador ou navegando pelo link restrito, usando seu **e-mail e senha**.
+- **Perfil Gestora (Admin):** Como Daiane, você tem os super poderes de cadastrar professoras, ver finanças (futuro) e mexer nos perfis globais e preços no site.
+- **Perfil Professora:** Visão mais focada e centralizada nas alunas que são direcionadas a ela.
+
+---
+
+## 2. Menu e Navegação (Painel da Esquerda)
+
+### 👥 Alunas (Lista de Alunas Ativas)
+Pense nesta tela como o seu 'fichário digital'. Aqui listamos todas as clientes matriculadas que podem frequentar seu espaço no momento atual.
+- Você verá opções coloridas de Busca rápida por "Status" ou "Nome".
+- Usando o botão verde ("**Nova Aluna**") ou (**Editar** ✏️ num cadastro existente), uma Ficha detalhadíssima será aberta, pronta para registrar Histórico Médico e Objetivos. 
+
+### 📋 Ex-Alunas (O Arquivo Morto)
+Aqui ficam as clientes inativas. Elas não aparecem no Quadro de Horários e na Tela de Treinos para economizar espaço e tempo das professoras.
+- Caso uma ex-aluna retorne para uma aula experimental ou plano novo, você não precisa cadastrá-la tudo de novo! O sistema possui o botão **"Reativar Cadastro"** 🔁 e ela pula na hora para a lista principal "Alunas".
+
+### 👩‍🏫 Equipe (Gestão dos Profissionais)
+*Exclusivo para a Daiane (Admin).*
+Esta tela organiza os professores da Magli e lista quantas clientes estão penduradas em cada professora no atual momento do mês, te informando sobre a distribuição da carga de trabalho e do faturamento.
+- Use **"+ Novo Membro"** e aponte para um nivel *"Professora"*.
+- Todos precisam de senha obrigatória (a segurança sempre em mente).
+- Se desligar uma professora, use o botão Desativar (🗑️). **Não** desative as fichas atreladas a ela, primeiro, navegue em cada "Aluna", edite e Troque de Professora Reponsável, as informações em Treinos transacionarão automaticamente com a Ficha.
+
+### 📅 Quadro de Horários (Quem está onde/A que horas)
+Seu grande painel Diário. Ele extrai os registros das Alunas e encaixa-os no layout semanal Segunda a Sexta.
+- **Dica:** É ótimo para enxergar "bolsões vazios", "horários congestionados", permitindo remanejamento de ofertas e descontos pra atrair novos clientes a ocupar tempo ocioso das máquinas.
+
+### 🔄 Troca de Treinos / Treinos Geral
+As professoras e você monitoram a progressão de suas alunas aqui!
+- Toda troca deve ser agendada. Indique que "iniciou no dia X para durar Y semanas".
+- Você cadastra Múltiplos treinos da Ana Maria por exemplo (Treino A, Treino B da perna, Peito...).
+- Quando o prazo vencer o layout brilha "Pendente" ⏳. Ao clicar o check list (✔️), o status pula pra "Concluído", confirmando um histórico excelente pra cobrar as evoluções nos meses seguintes!
+
+### ⚙️ Configurações (Website / Backups)
+As ações extremas e automações financeiras residem nessa tela.
+- Atualizou seus valores de plano Mensais/Trimestrais? Mexa na caixa monetária desta página e os botões da **Landpage do Cliente publicamente atualizarão na hora!** É dinâmico. Até o horário promocional é modificado nesta vitrine em segundos.
+- Faça quinzenalemte um Back-up Local (📥 Download Backup), isso irá descer pro seu Downloads uma pastinha com banco de Dados `.db`, guarde numa nuvem pessoal.
+
+---
+
+## 3. O Poder do Offline (Para a Professora)
+Se o provedor de internet falhar em Valença ou o roteador da recepção for puxado da tomada enquanto a Daiane, Professora A e Professora B registrem Fichas, e Troca de Treinos na sala — *respira fundo:* **Nenhum cadastro será perdido**.
+- Uma barra aparecerá dizendo: "**Você está offline. Alterações salvas localmente**."
+- Acredite no sistema; o sistema já guardou isso e colocou o aplicativo em Standby. Quando a internet fixar de volta, ele sobe silenciosamente seu pacote até lá no servidor principal. Nada é perdido graças à Célula PWA Sync Inteligente. Recomendo fechar a ficha sem pânico.

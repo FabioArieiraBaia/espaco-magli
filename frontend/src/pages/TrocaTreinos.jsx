@@ -11,12 +11,14 @@ function TrocaTreinos({ geral, professora }) {
   const [selectedAluna, setSelectedAluna] = useState(null);
   const [expandedTreino, setExpandedTreino] = useState(null);
   const [search, setSearch] = useState('');
+  const [viewingImage, setViewingImage] = useState(null); // URL da imagem para o lightbox
 
   // Novo treino form
   const [novoTreino, setNovoTreino] = useState({
     data_treino: '',
+    data_proxima: '',
     duracao_semanas: 8,
-    descricao_treino: ''
+    foto: null
   });
 
   // Edit treino form
@@ -24,9 +26,22 @@ function TrocaTreinos({ geral, professora }) {
     data_treino: '',
     data_proxima: '',
     duracao_semanas: 8,
-    descricao_treino: '',
-    status: 'pendente'
+    status: 'pendente',
+    foto: null
   });
+
+  const uploadFoto = async (treinoId, file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('foto', file);
+    try {
+      await api.post(`/treinos/${treinoId}/foto`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    } catch (error) {
+      console.error('Erro ao subir foto:', error);
+    }
+  };
 
   useEffect(() => {
     if (!api) return;
@@ -75,18 +90,24 @@ function TrocaTreinos({ geral, professora }) {
 
   const adicionarTreino = async (alunaId) => {
     if (!novoTreino.data_treino) return;
-
     try {
-      await api.post('/treinos', {
+      const res = await api.post('/treinos', {
         aluna_id: alunaId,
         professor_id: user?.id,
         data_treino: novoTreino.data_treino,
+        data_proxima: novoTreino.data_proxima,
         duracao_semanas: novoTreino.duracao_semanas,
-        descricao_treino: novoTreino.descricao_treino,
       });
+      
+      const treinoId = res.data.id || (await api.get(`/treinos/professora/${user?.id}`)).data.sort((a,b) => b.id - a.id)[0].id;
+      
+      if (novoTreino.foto) {
+        await uploadFoto(treinoId, novoTreino.foto);
+      }
+      
       loadTreinos();
       setShowModal(false);
-      setNovoTreino({ data_treino: '', duracao_semanas: 8, descricao_treino: '' });
+      setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, foto: null });
     } catch (error) {
       console.error('Erro ao adicionar treino:', error);
     }
@@ -96,6 +117,9 @@ function TrocaTreinos({ geral, professora }) {
     if (!editModal) return;
     try {
       await api.put(`/treinos/${editModal}`, editForm);
+      if (editForm.foto) {
+        await uploadFoto(editModal, editForm.foto);
+      }
       loadTreinos();
       setEditModal(null);
     } catch (error) {
@@ -123,9 +147,31 @@ function TrocaTreinos({ geral, professora }) {
   };
 
   const calcularProxima = (data, semanas) => {
-    const d = new Date(data);
-    d.setDate(d.getDate() + (semanas * 7));
-    return d.toLocaleDateString('pt-BR');
+    if (!data) return '-';
+    // Usar split para evitar problemas de fuso horário do JS ao interpretar string
+    const parts = data.split('-');
+    if (parts.length !== 3) return '-';
+    
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    
+    const date = new Date(y, m, d);
+    date.setDate(date.getDate() + (parseInt(semanas) * 7));
+    
+    const rd = String(date.getDate()).padStart(2, '0');
+    const rm = String(date.getMonth() + 1).padStart(2, '0');
+    const ry = date.getFullYear();
+    return `${rd}/${rm}/${ry}`;
+  };
+
+  const calcularSemanas = (inicio, fim) => {
+    if (!inicio || !fim) return 8;
+    const d1 = new Date(inicio);
+    const d2 = new Date(fim);
+    const diffTime = Math.abs(d2 - d1);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.ceil(diffDays / 7);
   };
 
   const formatDate = (dateStr) => {
@@ -139,8 +185,8 @@ function TrocaTreinos({ geral, professora }) {
       data_treino: treino.data_treino,
       data_proxima: treino.data_proxima,
       duracao_semanas: treino.duracao_semanas || 8,
-      descricao_treino: treino.descricao_treino || '',
-      status: treino.status
+      status: treino.status,
+      imagem_treino: treino.imagem_treino
     });
     setEditModal(treino.id);
   };
@@ -201,7 +247,7 @@ function TrocaTreinos({ geral, professora }) {
                 onClick={() => {
                   setSelectedAluna(alunaId);
                   setShowModal(true);
-                  setNovoTreino({ data_treino: '', duracao_semanas: 8, descricao_treino: '' });
+                  setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, foto: null });
                 }}
               >
                 + Novo Treino
@@ -233,9 +279,18 @@ function TrocaTreinos({ geral, professora }) {
                           </span>
                         </td>
                         <td>
-                          <span className={`treino-badge ${t.status}`}>
+                          <div className={`treino-badge ${t.status}`}>
                             {t.status === 'concluido' ? '✓ Concluído' : '⏳ Em andamento'}
-                          </span>
+                          </div>
+                          {t.imagem_treino && (
+                            <button 
+                              className="btn btn-sm btn-outline" 
+                              style={{ display: 'block', marginTop: '5px', fontSize: '0.7rem' }}
+                              onClick={() => setViewingImage(`http://localhost:3001/uploads/treinos/${t.imagem_treino}`)}
+                            >
+                              📸 Ver Treino
+                            </button>
+                          )}
                         </td>
                         <td>
                           <div className="flex gap-1">
@@ -275,32 +330,55 @@ function TrocaTreinos({ geral, professora }) {
                           </div>
                         </td>
                       </tr>
-                      {/* Área expandida com descrição do treino */}
                       {expandedTreino === t.id && (
                         <tr>
                           <td colSpan="6" style={{
-                            background: 'var(--gray)',
-                            padding: '1rem',
+                            background: 'rgba(0,0,0,0.2)',
+                            padding: '20px',
                             borderTop: '2px solid var(--primary)'
                           }}>
-                            <h4 style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>
-                              📝 Treino {t.treino_num}º - Exercícios
-                            </h4>
-                            {t.descricao_treino ? (
-                              <pre style={{
-                                whiteSpace: 'pre-wrap',
-                                fontFamily: 'inherit',
-                                fontSize: '0.9rem',
-                                lineHeight: '1.6',
-                                margin: 0,
-                                color: 'var(--text)'
-                              }}>
-                                {t.descricao_treino}
-                              </pre>
+                            <div className="flex jc-between ai-center mb-3">
+                              <h4 style={{ color: 'var(--primary)', margin: 0 }}>
+                                📋 Treino {t.treino_num}º - Ficha Digitalizada
+                              </h4>
+                              {t.imagem_treino && (
+                                <button
+                                  className="btn btn-sm btn-outline"
+                                  onClick={() => setViewingImage(`http://localhost:3001/uploads/treinos/${t.imagem_treino}`)}
+                                >
+                                  🔍 Ampliar Imagem
+                                </button>
+                              )}
+                            </div>
+                            
+                            {t.imagem_treino ? (
+                              <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                                <img
+                                  src={`http://localhost:3001/uploads/treinos/${t.imagem_treino}`}
+                                  alt="Ficha de Treino"
+                                  style={{ 
+                                    maxWidth: '100%', 
+                                    borderRadius: '8px', 
+                                    cursor: 'zoom-in', 
+                                    boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                                    border: '1px solid rgba(226, 0, 122, 0.2)' 
+                                  }}
+                                  onClick={() => setViewingImage(`http://localhost:3001/uploads/treinos/${t.imagem_treino}`)}
+                                />
+                              </div>
                             ) : (
-                              <p className="text-muted" style={{ margin: 0 }}>
-                                Nenhum exercício cadastrado. Clique em ✏️ para adicionar.
-                              </p>
+                              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                <p>Nenhuma imagem da ficha foi enviada para este treino.</p>
+                                <button 
+                                  className="btn btn-sm btn-outline" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    abrirEdicao(t);
+                                  }}
+                                >
+                                  ✏️ Adicionar Foto da Ficha
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -348,27 +426,80 @@ function TrocaTreinos({ geral, professora }) {
                 value={novoTreino.duracao_semanas}
                 onChange={e => setNovoTreino({ ...novoTreino, duracao_semanas: parseInt(e.target.value) || 8 })}
               />
-              <small className="text-muted">Padrão: 8 semanas (~2 meses)</small>
+              <small className="text-muted">Padrão: 8 semanas (~56 dias)</small>
             </div>
 
             {novoTreino.data_treino && (
               <p className="text-muted mb-3">
-                Próxima troca: <strong className="text-primary">
+                Próxima troca (calculada): <strong className="text-primary">
                   {calcularProxima(novoTreino.data_treino, novoTreino.duracao_semanas)}
                 </strong>
               </p>
             )}
 
             <div className="form-group mb-3">
-              <label>Descrição do Treino (Séries / Exercícios)</label>
-              <textarea
+              <label>Data da Próxima Troca (Manual)</label>
+              <input
+                type="date"
                 className="form-control"
-                rows={10}
-                placeholder={`Ex:\nTreino A - Superior\n1. Supino reto 3x12\n2. Desenvolvimento 3x10\n3. Puxada frontal 3x12\n4. Remada curvada 3x10\n5. Rosca direta 3x12\n6. Tríceps corda 3x12`}
-                value={novoTreino.descricao_treino}
-                onChange={e => setNovoTreino({ ...novoTreino, descricao_treino: e.target.value })}
-                style={{ fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.5' }}
+                value={novoTreino.data_proxima || ''}
+                onChange={e => {
+                  const novaData = e.target.value;
+                  const semanas = calcularSemanas(novoTreino.data_treino, novaData);
+                  setNovoTreino({ 
+                    ...novoTreino, 
+                    data_proxima: novaData,
+                    duracao_semanas: semanas
+                  });
+                }}
               />
+              <small className="text-muted">Opcional. Se digitado, as semanas serão recalculadas.</small>
+            </div>
+
+            <div className="form-group mb-3">
+              <label className="required" style={{ display: 'block', marginBottom: '10px' }}>Foto da Ficha de Treino</label>
+              <div className="file-upload-wrapper">
+                <input
+                  type="file"
+                  id="foto-novo"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={e => setNovoTreino({ ...novoTreino, foto: e.target.files[0] })}
+                />
+                <label 
+                  htmlFor="foto-novo" 
+                  className="btn btn-outline w-100" 
+                  style={{ 
+                    borderStyle: 'dashed', 
+                    height: '100px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    gap: '10px',
+                    borderColor: novoTreino.foto ? 'var(--primary)' : 'rgba(255,255,255,0.2)'
+                  }}
+                >
+                  <span style={{ fontSize: '1.5rem' }}>{novoTreino.foto ? '✅' : '📷'}</span>
+                  <span>{novoTreino.foto ? 'Foto Selecionada' : 'Clique para subir a foto da ficha'}</span>
+                </label>
+              </div>
+              {novoTreino.foto && (
+                <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                  <img 
+                    src={URL.createObjectURL(novoTreino.foto)} 
+                    alt="Preview" 
+                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid var(--primary)' }} 
+                  />
+                  <button 
+                    className="btn btn-sm btn-link" 
+                    style={{ display: 'block', margin: '5px auto', color: '#f44336' }}
+                    onClick={() => setNovoTreino({...novoTreino, foto: null})}
+                  >
+                    Remover Foto
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 mt-3">
@@ -405,7 +536,7 @@ function TrocaTreinos({ geral, professora }) {
                 type="date"
                 className="form-control"
                 value={editForm.data_treino}
-                onChange={e => setEditForm({ ...editForm, data_treino: e.target.value })}
+                onChange={e => setEditForm({ ...editForm, data_treino: e.target.value, data_proxima: '' })}
               />
             </div>
 
@@ -417,19 +548,27 @@ function TrocaTreinos({ geral, professora }) {
                 max="52"
                 className="form-control"
                 value={editForm.duracao_semanas}
-                onChange={e => setEditForm({ ...editForm, duracao_semanas: parseInt(e.target.value) || 8 })}
+                onChange={e => setEditForm({ ...editForm, duracao_semanas: parseInt(e.target.value) || 8, data_proxima: '' })}
               />
             </div>
 
             <div className="form-group mb-3">
-              <label>Data da Próxima Troca (Opcional)</label>
+              <label>Data da Próxima Troca (Manual)</label>
               <input
                 type="date"
                 className="form-control"
                 value={editForm.data_proxima}
-                onChange={e => setEditForm({ ...editForm, data_proxima: e.target.value })}
+                onChange={e => {
+                  const novaData = e.target.value;
+                  const semanas = calcularSemanas(editForm.data_treino, novaData);
+                  setEditForm({ 
+                    ...editForm, 
+                    data_proxima: novaData,
+                    duracao_semanas: semanas
+                  });
+                }}
               />
-              <small className="text-muted">Deixe vazio para calcular automaticamente com base na data e duração.</small>
+              <small className="text-muted">Se você digitar uma data manualmente, o número de semanas será recalculado.</small>
             </div>
 
             {editForm.data_treino && !editForm.data_proxima && (
@@ -439,6 +578,47 @@ function TrocaTreinos({ geral, professora }) {
                 </strong>
               </p>
             )}
+
+            <div className="form-group mb-3">
+              <label style={{ display: 'block', marginBottom: '10px' }}>Foto da Ficha de Treino</label>
+              <div className="file-upload-wrapper">
+                <input
+                  type="file"
+                  id="foto-edit"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={e => setEditForm({ ...editForm, foto: e.target.files[0] })}
+                />
+                <label 
+                  htmlFor="foto-edit" 
+                  className="btn btn-outline w-100" 
+                  style={{ 
+                    borderStyle: 'dashed', 
+                    height: '100px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    gap: '10px',
+                    borderColor: (editForm.foto || editForm.imagem_treino) ? 'var(--primary)' : 'rgba(255,255,255,0.2)'
+                  }}
+                >
+                  <span style={{ fontSize: '1.5rem' }}>{(editForm.foto || editForm.imagem_treino) ? '✅' : '📷'}</span>
+                  <span>{(editForm.foto || editForm.imagem_treino) ? 'Trocar foto da ficha' : 'Clique para subir a foto da ficha'}</span>
+                </label>
+              </div>
+              {(editForm.foto || editForm.imagem_treino) && (
+                <div style={{ marginTop: '10px', position: 'relative', textAlign: 'center' }}>
+                  <img 
+                    src={editForm.foto ? URL.createObjectURL(editForm.foto) : `http://localhost:3001/uploads/treinos/${editForm.imagem_treino}`} 
+                    alt="Treino" 
+                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid var(--primary)', cursor: 'pointer' }}
+                    onClick={() => setViewingImage(editForm.foto ? URL.createObjectURL(editForm.foto) : `http://localhost:3001/uploads/treinos/${editForm.imagem_treino}`)}
+                  />
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '5px' }}>Clique na imagem para ampliar</p>
+                </div>
+              )}
+            </div>
 
             <div className="form-group mb-3">
               <label>Status</label>
@@ -452,17 +632,7 @@ function TrocaTreinos({ geral, professora }) {
               </select>
             </div>
 
-            <div className="form-group mb-3">
-              <label>Descrição do Treino (Séries / Exercícios)</label>
-              <textarea
-                className="form-control"
-                rows={10}
-                placeholder={`Ex:\nTreino A - Superior\n1. Supino reto 3x12\n2. Desenvolvimento 3x10\n...`}
-                value={editForm.descricao_treino}
-                onChange={e => setEditForm({ ...editForm, descricao_treino: e.target.value })}
-                style={{ fontFamily: 'monospace', fontSize: '0.9rem', lineHeight: '1.5' }}
-              />
-            </div>
+
 
             <div className="flex gap-2 mt-3">
               <button className="btn btn-primary" onClick={salvarEdicao}>
@@ -472,6 +642,24 @@ function TrocaTreinos({ geral, professora }) {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Lightbox para ver imagem */}
+      {viewingImage && (
+        <div className="modal-overlay" onClick={() => setViewingImage(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '90%', maxHeight: '90%', background: 'transparent', border: 'none', padding: 0 }}>
+            <button 
+              onClick={() => setViewingImage(null)} 
+              style={{ position: 'fixed', right: '20px', top: '20px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', zIndex: 1001 }}
+            >
+              ×
+            </button>
+            <img 
+              src={viewingImage} 
+              alt="Treino Digitalizado" 
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '8px', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }} 
+            />
           </div>
         </div>
       )}

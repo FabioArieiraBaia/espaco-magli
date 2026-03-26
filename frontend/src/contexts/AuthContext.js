@@ -5,9 +5,9 @@ import { queueRequest, cacheResponse, getCachedResponse, preloadAllData, syncOff
 const AuthContext = createContext(null);
 
 // Instância do axios configurada
-const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '192.168.56.1';
-const apiBaseURL = isLocal
-  ? `http://${window.location.hostname}/api`
+const isDev = window.location.port === '3000';
+const apiBaseURL = isDev
+  ? 'http://localhost:3001'
   : `${window.location.origin}/api`;
 
 const api = axios.create({
