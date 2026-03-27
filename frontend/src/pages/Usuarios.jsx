@@ -148,13 +148,11 @@ function Usuarios() {
                                         </span>
                                     </td>
                                     <td>
-                                        {u.perfil === 'professora' && (
-                                            <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
-                                                {alunas.filter(a => a.professora_id === u.id).length}
-                                            </span>
-                                        )}
-                                        {u.perfil !== 'professora' && '-'}
+                                        <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                                            {alunas.filter(a => a.professora_id === u.id).length}
+                                        </span>
                                     </td>
+
                                     <td>
                                         <span style={{ color: u.ativo ? '#4CAF50' : '#f44336' }}>
                                             {u.ativo ? '● Ativo' : '● Inativo'}

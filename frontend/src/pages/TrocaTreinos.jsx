@@ -243,11 +243,17 @@ function TrocaTreinos({ geral, professora }) {
   return (
     <div className="page fade-in">
       <div className="page-header flex jc-between ai-center">
-        <h1>
-          {geral ? '📊 Troca de Treinos Geral' :
-            professora ? `🔄 Troca de Treinos - ${professora}` :
-              '🔄 Troca de Treinos'}
-        </h1>
+        <div>
+          <h1 style={{ marginBottom: '0.25rem' }}>
+            {geral ? '📊 Troca de Treinos Geral' :
+              professora ? `🔄 Troca de Treinos - ${professora}` :
+                '🔄 Troca de Treinos'}
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+            {alunasLista.filter(a => a.nome.toLowerCase().includes(search.toLowerCase())).length} alunas na lista
+          </p>
+        </div>
+
         <input
           type="text"
           className="form-control"
