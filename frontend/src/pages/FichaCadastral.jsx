@@ -95,6 +95,13 @@ function FichaCadastral() {
     if (!api || !id) return;
     api.get(`/alunas/${id}`).then(res => {
       const data = res.data;
+      
+      // Converter nascimento para YYYY-MM-DD se estiver em DD/MM/YYYY
+      if (data.nascimento && data.nascimento.includes('/')) {
+        const [d, m, y] = data.nascimento.split('/');
+        if (y && y.length === 4) data.nascimento = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+
       let horarios = data.horarios || {};
       if (Array.isArray(horarios)) {
         const h = {}; (data.dias_semana || []).forEach(d => { h[d] = [...horarios]; }); horarios = h;

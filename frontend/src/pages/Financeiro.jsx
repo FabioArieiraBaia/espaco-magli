@@ -116,19 +116,33 @@ function Financeiro() {
     return `${mesesNomes[parseInt(m)]} ${y}`;
   };
 
-  const getBadgeVencimento = (d, pago) => {
+  const getBadgeVencimento = (d, pago, mesReceita) => {
     if (pago || !d) return null;
-    const [y, m, day] = d.split('-').map(Number);
+    
+    // Extrair apenas o DIA do vencimento original
+    const [origY, origM, day] = d.split('-').map(Number);
+    
+    // Usar o mês da RECEITA (mesReceita é "YYYY-MM")
+    const [y, m] = mesReceita.split('-').map(Number);
+    
+    const vencimentoDate = new Date(y, m - 1, day);
     const today = new Date();
-    const currentDay = today.getDate();
+    today.setHours(0, 0, 0, 0);
 
-    if (currentDay > day) {
+    if (today > vencimentoDate) {
       return <div style={{ display: 'inline-block', padding: '2px 6px', background: '#f44336', color: 'white', borderRadius: '4px', fontSize: '0.75rem', marginTop: '4px' }}>Atrasado</div>;
-    } else if (day - currentDay <= 3 && day - currentDay >= 0) {
-      return <div style={{ display: 'inline-block', padding: '2px 6px', background: '#ff9800', color: 'white', borderRadius: '4px', fontSize: '0.75rem', marginTop: '4px' }}>Vence em {day - currentDay} d</div>;
+    } else {
+      const diffTime = vencimentoDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 3 && diffDays >= 0) {
+        return <div style={{ display: 'inline-block', padding: '2px 6px', background: '#ff9800', color: 'white', borderRadius: '4px', fontSize: '0.75rem', marginTop: '4px' }}>Vence em {diffDays} d</div>;
+      }
     }
     return null;
   };
+
+
 
   // KPI Calculations
   const receitasPagas = receitas.filter(r => r.pago).reduce((acc, r) => acc + Math.max(0, r.valor - (r.aluna_desconto || 0)), 0);
@@ -264,7 +278,7 @@ function Financeiro() {
                           <div className={`treino-badge ${r.pago ? '' : 'pendente'}`} style={{ display: 'inline-block' }}>
                             {r.pago ? '✓ Pago' : '⏳ Pendente'}
                           </div>
-                          {getBadgeVencimento(r.aluna_vencimento, r.pago)}
+                          {getBadgeVencimento(r.aluna_vencimento, r.pago, r.mes)}
                           {r.pago && (
                             <div style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--text-muted)' }}>
                               Via {r.meio_pagamento || 'Dinheiro'} • {r.tipo_conta === 'personal' ? '👤 Personal' : '🏢 Academia'}

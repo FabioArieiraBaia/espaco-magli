@@ -45,6 +45,8 @@ class Database {
     }
 
     public static function getDbPath() {
+        $rootDb = dirname(dirname(__DIR__)) . '/magli.db';
+        if (file_exists($rootDb)) return $rootDb;
         return dirname(__DIR__) . '/database/magli.db';
     }
     

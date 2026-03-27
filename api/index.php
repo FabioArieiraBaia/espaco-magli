@@ -13,8 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Servir arquivos estáticos da pasta uploads (Imagens de Treino)
 $requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-if (preg_match('/^\/uploads\/(.+)$/', $requestPath, $matches)) {
-    $filePath = __DIR__ . '/uploads/' . $matches[1];
+if (preg_match('/^(\/api)?\/uploads\/(.+)$/', $requestPath, $matches)) {
+    $filePath = __DIR__ . '/uploads/' . $matches[2];
     
     if (file_exists($filePath) && !is_dir($filePath)) {
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
@@ -442,16 +442,51 @@ if ($method === 'POST' && preg_match('/^\/treinos\/(\d+)\/foto$/', $uri, $matche
     }
     
     $file = $_FILES['foto'];
+    
+    // Verificar se houve erro no upload (ex: PHP max size)
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        $errorMsgs = [
+            UPLOAD_ERR_INI_SIZE   => 'O arquivo excede o limite (upload_max_filesize)',
+            UPLOAD_ERR_FORM_SIZE  => 'O arquivo excede o limite do formulário',
+            UPLOAD_ERR_PARTIAL    => 'O upload foi feito apenas parcialmente',
+            UPLOAD_ERR_NO_FILE    => 'Nenhum arquivo enviado',
+            UPLOAD_ERR_NO_TMP_DIR => 'Pasta temporária ausente',
+            UPLOAD_ERR_CANT_WRITE => 'Falha ao escrever no disco',
+            UPLOAD_ERR_EXTENSION  => 'Extensão PHP interrompeu o upload'
+        ];
+        $msg = $errorMsgs[$file['error']] ?? 'Erro desconhecido no upload';
+        jsonResponse(['error' => $msg, 'code' => $file['error']], 500);
+    }
+
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowed = ['jpg', 'jpeg', 'png'];
+    $allowed = ['jpg', 'jpeg', 'png', 'webp'];
     
     if (!in_array($ext, $allowed)) {
-        jsonResponse(['error' => 'Formato não suportado. Use JPG, JPEG ou PNG.'], 400);
+        jsonResponse(['error' => 'Formato não suportado. Use JPG, JPEG, PNG ou WEBP.'], 400);
     }
     
     $uploadDir = __DIR__ . '/uploads/treinos/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+    if (!is_dir($uploadDir)) {
+        if (!mkdir($uploadDir, 0777, true)) {
+            jsonResponse(['error' => 'Não foi possível criar o diretório de uploads. Verifique as permissões da pasta api/uploads/.'], 500);
+        }
+    }
+
+    if (!is_writable($uploadDir)) {
+        jsonResponse(['error' => 'O diretório de uploads não tem permissão de escrita (chmod).'], 500);
+    }
     
+    // Remover foto anterior se existir
+    $stmt = $pdo->prepare("SELECT imagem_treino FROM treinos WHERE id = ?");
+    $stmt->execute([$id]);
+    $oldFile = $stmt->fetch()['imagem_treino'] ?? null;
+    if ($oldFile) {
+        $oldPath = $uploadDir . $oldFile;
+        if (file_exists($oldPath)) {
+            unlink($oldPath);
+        }
+    }
+
     $fileName = 'treino_' . $id . '_' . time() . '.' . $ext;
     $targetPath = $uploadDir . $fileName;
     
@@ -460,8 +495,33 @@ if ($method === 'POST' && preg_match('/^\/treinos\/(\d+)\/foto$/', $uri, $matche
         $stmt->execute([$fileName, $id]);
         jsonResponse(['success' => true, 'path' => $fileName]);
     } else {
-        jsonResponse(['error' => 'Falha ao salvar arquivo'], 500);
+        jsonResponse(['error' => 'Falha ao mover o arquivo para a pasta final. Verifique as permissões de pasta.'], 500);
     }
+}
+
+// DELETE - Remover foto do treino
+if ($method === 'DELETE' && preg_match('/^\/treinos\/(\d+)\/foto$/', $uri, $matches)) {
+    $user = getAuthUser($pdo);
+    if (!$user) jsonResponse(['error' => 'Não autorizado'], 401);
+    
+    $id = $matches[1];
+    
+    // Buscar nome da imagem atual
+    $stmt = $pdo->prepare("SELECT imagem_treino FROM treinos WHERE id = ?");
+    $stmt->execute([$id]);
+    $treino = $stmt->fetch();
+    
+    if ($treino && $treino['imagem_treino']) {
+        $filePath = __DIR__ . '/uploads/treinos/' . $treino['imagem_treino'];
+        if (file_exists($filePath)) {
+            unlink($filePath);
+        }
+        
+        $stmt = $pdo->prepare("UPDATE treinos SET imagem_treino = NULL WHERE id = ?");
+        $stmt->execute([$id]);
+    }
+    
+    jsonResponse(['success' => true]);
 }
 
 // ROTA: Treinos
@@ -698,6 +758,37 @@ if ($uri === '/receitas' && $method === 'GET') {
     
     $mes = $_GET['mes'] ?? date('Y-m');
     
+    // --- GERAÇÃO AUTOMÁTICA DE RECEITAS PARA O MÊS ---
+    // 1. Pegar todas alunas ativas
+    $stmtAlunas = $pdo->query("SELECT id, vezes_semana, desconto FROM alunas WHERE ativa = 1");
+    $alunasAtivas = $stmtAlunas->fetchAll();
+    
+    // 2. Pegar todas receitas já existentes para este mês
+    $stmtEx = $pdo->prepare("SELECT aluna_id FROM receitas WHERE mes = ?");
+    $stmtEx->execute([$mes]);
+    $idsComReceita = $stmtEx->fetchAll(PDO::FETCH_COLUMN);
+    
+    // 3. Pegar precos das configuracoes
+    $stmtPrecos = $pdo->query("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'preco_%'");
+    $precosRows = $stmtPrecos->fetchAll();
+    $precos = [];
+    foreach($precosRows as $pr) { $precos[$pr['chave']] = floatval($pr['valor']); }
+
+    // 4. Criar receitas faltantes
+    $stmtInsert = $pdo->prepare("INSERT INTO receitas (aluna_id, valor, vezes_semana, mes) VALUES (?, ?, ?, ?)");
+    foreach ($alunasAtivas as $aluna) {
+        if (!in_array($aluna['id'], $idsComReceita)) {
+            $valorBase = $precos['preco_' . $aluna['vezes_semana'] . 'x'] ?? 0;
+            $stmtInsert->execute([
+                $aluna['id'],
+                $valorBase,
+                $aluna['vezes_semana'],
+                $mes
+            ]);
+        }
+    }
+    // --- FIM DA GERAÇÃO ---
+
     $stmt = $pdo->prepare("
         SELECT r.*, a.nome as aluna_nome, a.desconto as aluna_desconto, a.data_vencimento as aluna_vencimento
         FROM receitas r

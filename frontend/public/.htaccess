@@ -1,9 +1,9 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /magli/
+  RewriteBase /
   
   # API requests go to the api subfolder
-  RewriteCond %{REQUEST_URI} ^/magli/api [NC]
+  RewriteCond %{REQUEST_URI} ^/api [NC]
   RewriteRule ^ - [L]
 
   # Existing files/directories are served directly
@@ -11,5 +11,5 @@
   RewriteCond %{REQUEST_FILENAME} !-d
   
   # Everything else goes to index.html for React Router
-  RewriteRule . /magli/index.html [L]
+  RewriteRule . /index.html [L]
 </IfModule>

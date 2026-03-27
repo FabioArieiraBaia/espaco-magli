@@ -15,13 +15,17 @@ const ConnectionStatus = () => {
         const count = await syncOfflineRequests(api, user?.id);
         setSyncing(false);
         if (count > 0) {
-          // Opcionalmente podemos disparar um evento pra pedir refresh se quisermos
-          window.location.reload(); // Recarregar para pegar dados atualizados
+          window.location.reload(); 
         }
       }
     };
 
     const handleOffline = () => setOnline(false);
+
+    // Tentar sincronizar ao montar se já estiver online
+    if (navigator.onLine) {
+      handleOnline();
+    }
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -30,7 +34,8 @@ const ConnectionStatus = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [api, user?.id]);
+
 
   // Mostrar UI só se estiver offline OU sincronizando
   if (online && !syncing) return null;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import BirthdayAlerts from '../components/BirthdayAlerts';
 
 function DashboardAdmin() {
   const { user, logout } = useAuth();
@@ -81,6 +82,7 @@ function DashboardAdmin() {
 
       {/* Main Content */}
       <main className="main-content" onClick={() => menuOpen && setMenuOpen(false)}>
+        <BirthdayAlerts />
         <Outlet />
       </main>
     </div>

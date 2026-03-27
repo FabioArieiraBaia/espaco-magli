@@ -87,19 +87,25 @@ function AlunasList() {
 
     const getBadgeVencimento = (d, pago) => {
         if (pago || !d) return null;
+        
         const [y, m, day] = d.split('-').map(Number);
+        const vencimentoDate = new Date(y, m - 1, day);
         const today = new Date();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1;
-        const currentDay = today.getDate();
+        today.setHours(0, 0, 0, 0);
 
-        if (currentDay > day) {
+        if (today > vencimentoDate) {
             return <span style={{ display: 'inline-block', padding: '2px 6px', background: '#f44336', color: 'white', borderRadius: '4px', fontSize: '0.75rem' }}>Atrasado</span>;
-        } else if (day - currentDay <= 3 && day - currentDay >= 0) {
-            return <span style={{ display: 'inline-block', padding: '2px 6px', background: '#ff9800', color: 'white', borderRadius: '4px', fontSize: '0.75rem' }}>Vence em {day - currentDay} d</span>;
+        } else {
+            const diffTime = vencimentoDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays <= 3 && diffDays >= 0) {
+                return <span style={{ display: 'inline-block', padding: '2px 6px', background: '#ff9800', color: 'white', borderRadius: '4px', fontSize: '0.75rem' }}>Vence em {diffDays} d</span>;
+            }
         }
         return null;
     };
+
 
     const filteredAlunas = alunas.filter(a =>
         a.nome.toLowerCase().includes(search.toLowerCase()) ||

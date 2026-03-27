@@ -11,14 +11,14 @@ function TrocaTreinos({ geral, professora }) {
   const [selectedAluna, setSelectedAluna] = useState(null);
   const [expandedTreino, setExpandedTreino] = useState(null);
   const [search, setSearch] = useState('');
-  const [viewingImage, setViewingImage] = useState(null); // URL da imagem para o lightbox
 
   // Novo treino form
   const [novoTreino, setNovoTreino] = useState({
     data_treino: '',
     data_proxima: '',
     duracao_semanas: 8,
-    foto: null
+    foto: null,
+    descricao_treino: ''
   });
 
   // Edit treino form
@@ -27,21 +27,11 @@ function TrocaTreinos({ geral, professora }) {
     data_proxima: '',
     duracao_semanas: 8,
     status: 'pendente',
-    foto: null
+    foto: null,
+    descricao_treino: ''
   });
 
-  const uploadFoto = async (treinoId, file) => {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('foto', file);
-    try {
-      await api.post(`/treinos/${treinoId}/foto`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-    } catch (error) {
-      console.error('Erro ao subir foto:', error);
-    }
-  };
+
 
   useEffect(() => {
     if (!api) return;
@@ -88,6 +78,47 @@ function TrocaTreinos({ geral, professora }) {
     return diff <= 3 && diff >= 0 && t.status === 'pendente';
   });
 
+  // Verificar aniversariantes (hoje e próximos 3 dias)
+  const aniversariantes = alunas.filter(a => {
+    if (!a.nascimento) return false;
+    
+    // Parsing robusto (suporta YYYY-MM-DD e DD/MM/YYYY)
+    let diaNiver, mesNiver;
+    if (a.nascimento.includes('-')) {
+      const parts = a.nascimento.split('-');
+      if (parts[0].length === 4) { // YYYY-MM-DD
+        mesNiver = parseInt(parts[1]);
+        diaNiver = parseInt(parts[2]);
+      } else { // DD-MM-YYYY
+        diaNiver = parseInt(parts[0]);
+        mesNiver = parseInt(parts[1]);
+      }
+    } else if (a.nascimento.includes('/')) {
+      const parts = a.nascimento.split('/');
+      if (parts[2] && parts[2].length === 4) { // DD/MM/YYYY
+        diaNiver = parseInt(parts[0]);
+        mesNiver = parseInt(parts[1]);
+      } else { // YYYY/MM/DD
+        mesNiver = parseInt(parts[1]);
+        diaNiver = parseInt(parts[2]);
+      }
+    } else {
+      return false;
+    }
+
+    const hojeD = hoje.getDate();
+    const hojeM = hoje.getMonth() + 1;
+    
+    // Mesma data
+    if (diaNiver === hojeD && mesNiver === hojeM) return true;
+    
+    // Próximos 3 dias
+    const dataNiver = new Date(hoje.getFullYear(), mesNiver - 1, diaNiver);
+    const diff = Math.ceil((dataNiver - hoje) / (1000 * 60 * 60 * 24));
+    
+    return diff > 0 && diff <= 3;
+  });
+
   const adicionarTreino = async (alunaId) => {
     if (!novoTreino.data_treino) return;
     try {
@@ -101,13 +132,9 @@ function TrocaTreinos({ geral, professora }) {
       
       const treinoId = res.data.id || (await api.get(`/treinos/professora/${user?.id}`)).data.sort((a,b) => b.id - a.id)[0].id;
       
-      if (novoTreino.foto) {
-        await uploadFoto(treinoId, novoTreino.foto);
-      }
-      
       loadTreinos();
       setShowModal(false);
-      setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, foto: null });
+      setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, descricao_treino: '' });
     } catch (error) {
       console.error('Erro ao adicionar treino:', error);
     }
@@ -117,9 +144,6 @@ function TrocaTreinos({ geral, professora }) {
     if (!editModal) return;
     try {
       await api.put(`/treinos/${editModal}`, editForm);
-      if (editForm.foto) {
-        await uploadFoto(editModal, editForm.foto);
-      }
       loadTreinos();
       setEditModal(null);
     } catch (error) {
@@ -145,6 +169,8 @@ function TrocaTreinos({ geral, professora }) {
       console.error('Erro ao deletar treino:', error);
     }
   };
+
+
 
   const calcularProxima = (data, semanas) => {
     if (!data) return '-';
@@ -186,10 +212,29 @@ function TrocaTreinos({ geral, professora }) {
       data_proxima: treino.data_proxima,
       duracao_semanas: treino.duracao_semanas || 8,
       status: treino.status,
-      imagem_treino: treino.imagem_treino
+      imagem_treino: treino.imagem_treino,
+      descricao_treino: treino.descricao_treino || ''
     });
     setEditModal(treino.id);
   };
+
+  // Passo 1: Converter para array e adicionar lógica de prioridade (troca próxima)
+  const alunasLista = Object.entries(treinosPorAluna)
+    .map(([id, data]) => {
+      const temTrocaProxima = data.treinos.some(t => {
+        const dataProxima = new Date(t.data_proxima);
+        const diff = Math.ceil((dataProxima - hoje) / (1000 * 60 * 60 * 24));
+        return diff <= 3 && diff >= 0 && t.status === 'pendente';
+      });
+      return { id, ...data, temTrocaProxima };
+    })
+    .sort((a, b) => {
+      // Prioridade 1: Troca próxima (ordem decrescente de 'temTrocaProxima')
+      if (a.temTrocaProxima && !b.temTrocaProxima) return -1;
+      if (!a.temTrocaProxima && b.temTrocaProxima) return 1;
+      // Prioridade 2: Nome (ordem alfabética)
+      return a.nome.localeCompare(b.nome);
+    });
 
   if (loading) {
     return <div className="page"><p className="text-center">Carregando...</p></div>;
@@ -222,7 +267,7 @@ function TrocaTreinos({ geral, professora }) {
             <ul style={{ margin: '0.5rem 0 0 1rem' }}>
               {treinosProximos.slice(0, 5).map(t => (
                 <li key={t.id}>
-                  {t.aluna_nome} - {formatDate(t.data_proxima)}
+                  {t.aluna_nome} ({t.professora_nome || 'Sem Prof.'}) - {formatDate(t.data_proxima)}
                 </li>
               ))}
             </ul>
@@ -230,22 +275,68 @@ function TrocaTreinos({ geral, professora }) {
         </div>
       )}
 
-      {/* Tabela por aluna */}
-      {Object.entries(treinosPorAluna)
-        .filter(([, data]) => data.nome.toLowerCase().includes(search.toLowerCase()))
-        .map(([alunaId, data]) => (
-          <div key={alunaId} className="card mb-3">
+      {/* Alertas de Aniversário */}
+      {aniversariantes.length > 0 && (
+        <div className="treino-alert" style={{ background: 'linear-gradient(135deg, #673ab7, #9c27b0)', marginBottom: '1.5rem' }}>
+          <span className="treino-alert-icon">🎂</span>
+          <div>
+            <strong>Parabéns!</strong> Aniversariantes do dia e próximos dias:
+            <ul style={{ margin: '0.5rem 0 0 1rem' }}>
+              {aniversariantes.map(a => {
+                const [y, m, d] = a.nascimento.split('-');
+                const isHoje = hoje.getDate() === parseInt(d) && (hoje.getMonth() + 1) === parseInt(m);
+                return (
+                  <li key={a.id}>
+                    {a.nome} - {d}/{m} {isHoje ? <strong>(É HOJE! 🎉)</strong> : '(Em breve)'}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Tabela por aluna (Lista Numerada e Ordenada) */}
+      {alunasLista
+        .filter((a) => a.nome.toLowerCase().includes(search.toLowerCase()))
+        .map((a, index) => (
+          <div 
+            key={a.id} 
+            className="card mb-3" 
+            style={a.temTrocaProxima ? { 
+              border: '2px solid var(--primary)', 
+              boxShadow: '0 0 15px rgba(226, 0, 122, 0.2)',
+              position: 'relative'
+            } : {}}
+          >
+            {a.temTrocaProxima && (
+              <div style={{ 
+                position: 'absolute', 
+                top: '-12px', 
+                right: '20px', 
+                background: 'var(--primary)', 
+                color: 'white', 
+                padding: '2px 10px', 
+                borderRadius: '20px', 
+                fontSize: '0.7rem', 
+                fontWeight: 'bold',
+                zIndex: 10
+              }}>
+                ⚠️ TROCA PENDENTE
+              </div>
+            )}
             <div className="flex ai-center jc-between mb-2">
               <h3 style={{ marginBottom: 0 }}>
-                {data.nome}
+                <span style={{ color: 'var(--primary)', marginRight: '8px' }}>{index + 1}.</span>
+                {a.nome}
                 <div className="treino-badge" style={{ marginLeft: '1rem', background: 'rgba(226,0,122,0.1)', color: 'var(--primary)', border: '1px solid var(--primary)', fontSize: '0.8rem' }}>
-                  👩‍🏫 {data.professora_nome || 'Sem Professora'}
+                  👩‍🏫 {a.professora_nome || 'Sem Professora'}
                 </div>
               </h3>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => {
-                  setSelectedAluna(alunaId);
+                  setSelectedAluna(a.id);
                   setShowModal(true);
                   setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, foto: null });
                 }}
@@ -253,6 +344,7 @@ function TrocaTreinos({ geral, professora }) {
                 + Novo Treino
               </button>
             </div>
+
 
             <div className="table-container">
               <table>
@@ -267,7 +359,7 @@ function TrocaTreinos({ geral, professora }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.treinos.map(t => (
+                  {a.treinos.map(t => (
                     <React.Fragment key={t.id}>
                       <tr>
                         <td style={{ fontWeight: 600 }}>{t.treino_num}º</td>
@@ -282,15 +374,6 @@ function TrocaTreinos({ geral, professora }) {
                           <div className={`treino-badge ${t.status}`}>
                             {t.status === 'concluido' ? '✓ Concluído' : '⏳ Em andamento'}
                           </div>
-                          {t.imagem_treino && (
-                            <button 
-                              className="btn btn-sm btn-outline" 
-                              style={{ display: 'block', marginTop: '5px', fontSize: '0.7rem' }}
-                              onClick={() => setViewingImage(`http://localhost:3001/uploads/treinos/${t.imagem_treino}`)}
-                            >
-                              📸 Ver Treino
-                            </button>
-                          )}
                         </td>
                         <td>
                           <div className="flex gap-1">
@@ -339,46 +422,27 @@ function TrocaTreinos({ geral, professora }) {
                           }}>
                             <div className="flex jc-between ai-center mb-3">
                               <h4 style={{ color: 'var(--primary)', margin: 0 }}>
-                                📋 Treino {t.treino_num}º - Ficha Digitalizada
+                                📋 Treino {t.treino_num}º - Exercícios Digitados
                               </h4>
-                              {t.imagem_treino && (
-                                <button
-                                  className="btn btn-sm btn-outline"
-                                  onClick={() => setViewingImage(`http://localhost:3001/uploads/treinos/${t.imagem_treino}`)}
-                                >
-                                  🔍 Ampliar Imagem
-                                </button>
-                              )}
                             </div>
                             
-                            {t.imagem_treino ? (
-                              <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                                <img
-                                  src={`http://localhost:3001/uploads/treinos/${t.imagem_treino}`}
-                                  alt="Ficha de Treino"
-                                  style={{ 
-                                    maxWidth: '100%', 
-                                    borderRadius: '8px', 
-                                    cursor: 'zoom-in', 
-                                    boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-                                    border: '1px solid rgba(226, 0, 122, 0.2)' 
-                                  }}
-                                  onClick={() => setViewingImage(`http://localhost:3001/uploads/treinos/${t.imagem_treino}`)}
-                                />
+                            {t.descricao_treino ? (
+                              <div className="mb-3" style={{ 
+                                padding: '15px', 
+                                background: 'rgba(226, 0, 122, 0.05)', 
+                                borderRadius: '8px', 
+                                border: '1px solid rgba(226, 0, 122, 0.2)',
+                                borderLeft: '4px solid var(--primary)',
+                                whiteSpace: 'pre-wrap',
+                                fontSize: '1rem',
+                                color: 'white'
+                              }}>
+                                {t.descricao_treino}
                               </div>
                             ) : (
-                              <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                <p>Nenhuma imagem da ficha foi enviada para este treino.</p>
-                                <button 
-                                  className="btn btn-sm btn-outline" 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    abrirEdicao(t);
-                                  }}
-                                >
-                                  ✏️ Adicionar Foto da Ficha
-                                </button>
-                              </div>
+                               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                 Nenhuma descrição ou exercícios cadastrados para este treino.
+                               </div>
                             )}
                           </td>
                         </tr>
@@ -391,7 +455,7 @@ function TrocaTreinos({ geral, professora }) {
           </div>
         ))}
 
-      {Object.keys(treinosPorAluna).length === 0 && (
+      {alunasLista.length === 0 && (
         <div className="card text-center">
           <p className="text-muted">Nenhuma aluna cadastrada ainda.</p>
         </div>
@@ -456,50 +520,20 @@ function TrocaTreinos({ geral, professora }) {
               <small className="text-muted">Opcional. Se digitado, as semanas serão recalculadas.</small>
             </div>
 
+
+
+
+
             <div className="form-group mb-3">
-              <label className="required" style={{ display: 'block', marginBottom: '10px' }}>Foto da Ficha de Treino</label>
-              <div className="file-upload-wrapper">
-                <input
-                  type="file"
-                  id="foto-novo"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={e => setNovoTreino({ ...novoTreino, foto: e.target.files[0] })}
-                />
-                <label 
-                  htmlFor="foto-novo" 
-                  className="btn btn-outline w-100" 
-                  style={{ 
-                    borderStyle: 'dashed', 
-                    height: '100px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    gap: '10px',
-                    borderColor: novoTreino.foto ? 'var(--primary)' : 'rgba(255,255,255,0.2)'
-                  }}
-                >
-                  <span style={{ fontSize: '1.5rem' }}>{novoTreino.foto ? '✅' : '📷'}</span>
-                  <span>{novoTreino.foto ? 'Foto Selecionada' : 'Clique para subir a foto da ficha'}</span>
-                </label>
-              </div>
-              {novoTreino.foto && (
-                <div style={{ marginTop: '10px', textAlign: 'center' }}>
-                  <img 
-                    src={URL.createObjectURL(novoTreino.foto)} 
-                    alt="Preview" 
-                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid var(--primary)' }} 
-                  />
-                  <button 
-                    className="btn btn-sm btn-link" 
-                    style={{ display: 'block', margin: '5px auto', color: '#f44336' }}
-                    onClick={() => setNovoTreino({...novoTreino, foto: null})}
-                  >
-                    Remover Foto
-                  </button>
-                </div>
-              )}
+              <label>Descrição do Treino (Opcional)</label>
+              <textarea
+                className="form-control"
+                rows="4"
+                placeholder="Ex: Supino 3x12, Agachamento 4x10..."
+                value={novoTreino.descricao_treino}
+                onChange={e => setNovoTreino({ ...novoTreino, descricao_treino: e.target.value })}
+                style={{ resize: 'vertical' }}
+              ></textarea>
             </div>
 
             <div className="flex gap-2 mt-3">
@@ -571,6 +605,8 @@ function TrocaTreinos({ geral, professora }) {
               <small className="text-muted">Se você digitar uma data manualmente, o número de semanas será recalculado.</small>
             </div>
 
+
+
             {editForm.data_treino && !editForm.data_proxima && (
               <p className="text-muted mb-3">
                 Próxima troca (calculada): <strong className="text-primary">
@@ -579,45 +615,17 @@ function TrocaTreinos({ geral, professora }) {
               </p>
             )}
 
+
+
             <div className="form-group mb-3">
-              <label style={{ display: 'block', marginBottom: '10px' }}>Foto da Ficha de Treino</label>
-              <div className="file-upload-wrapper">
-                <input
-                  type="file"
-                  id="foto-edit"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={e => setEditForm({ ...editForm, foto: e.target.files[0] })}
-                />
-                <label 
-                  htmlFor="foto-edit" 
-                  className="btn btn-outline w-100" 
-                  style={{ 
-                    borderStyle: 'dashed', 
-                    height: '100px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    gap: '10px',
-                    borderColor: (editForm.foto || editForm.imagem_treino) ? 'var(--primary)' : 'rgba(255,255,255,0.2)'
-                  }}
-                >
-                  <span style={{ fontSize: '1.5rem' }}>{(editForm.foto || editForm.imagem_treino) ? '✅' : '📷'}</span>
-                  <span>{(editForm.foto || editForm.imagem_treino) ? 'Trocar foto da ficha' : 'Clique para subir a foto da ficha'}</span>
-                </label>
-              </div>
-              {(editForm.foto || editForm.imagem_treino) && (
-                <div style={{ marginTop: '10px', position: 'relative', textAlign: 'center' }}>
-                  <img 
-                    src={editForm.foto ? URL.createObjectURL(editForm.foto) : `http://localhost:3001/uploads/treinos/${editForm.imagem_treino}`} 
-                    alt="Treino" 
-                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid var(--primary)', cursor: 'pointer' }}
-                    onClick={() => setViewingImage(editForm.foto ? URL.createObjectURL(editForm.foto) : `http://localhost:3001/uploads/treinos/${editForm.imagem_treino}`)}
-                  />
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '5px' }}>Clique na imagem para ampliar</p>
-                </div>
-              )}
+              <label>Descrição do Treino</label>
+              <textarea
+                className="form-control"
+                rows="4"
+                value={editForm.descricao_treino}
+                onChange={e => setEditForm({ ...editForm, descricao_treino: e.target.value })}
+                style={{ resize: 'vertical' }}
+              ></textarea>
             </div>
 
             <div className="form-group mb-3">
@@ -645,24 +653,7 @@ function TrocaTreinos({ geral, professora }) {
           </div>
         </div>
       )}
-      {/* Lightbox para ver imagem */}
-      {viewingImage && (
-        <div className="modal-overlay" onClick={() => setViewingImage(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '90%', maxHeight: '90%', background: 'transparent', border: 'none', padding: 0 }}>
-            <button 
-              onClick={() => setViewingImage(null)} 
-              style={{ position: 'fixed', right: '20px', top: '20px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', zIndex: 1001 }}
-            >
-              ×
-            </button>
-            <img 
-              src={viewingImage} 
-              alt="Treino Digitalizado" 
-              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '8px', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }} 
-            />
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 function QuadroHorarios() {
   const { api } = useAuth();
   const [horarios, setHorarios] = useState({});
+  const [alunas, setAlunas] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const dias = ['segunda', 'terça', 'quarta', 'quinta', 'sexta'];
@@ -27,8 +28,12 @@ function QuadroHorarios() {
   const loadHorarios = async () => {
     if (!api) return;
     try {
-      const res = await api.get('/horarios');
-      setHorarios(res.data);
+      const [resHorarios, resAlunas] = await Promise.all([
+        api.get('/horarios'),
+        api.get('/alunas')
+      ]);
+      setHorarios(resHorarios.data);
+      setAlunas(resAlunas.data);
     } catch (error) {
       console.error('Erro ao carregar horários:', error);
     } finally {
