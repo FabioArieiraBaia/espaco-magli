@@ -88,10 +88,12 @@ function AlunasList() {
     const getBadgeVencimento = (d, pago) => {
         if (pago || !d) return null;
         
-        const [y, m, day] = d.split('-').map(Number);
-        const vencimentoDate = new Date(y, m - 1, day);
+        const [origY, origM, day] = d.split('-').map(Number);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+
+        // Criar data de vencimento baseada no dia cadastrado, mas no MÊS E ANO ATUAIS
+        const vencimentoDate = new Date(today.getFullYear(), today.getMonth(), day);
 
         if (today > vencimentoDate) {
             return <span style={{ display: 'inline-block', padding: '2px 6px', background: '#f44336', color: 'white', borderRadius: '4px', fontSize: '0.75rem' }}>Atrasado</span>;
@@ -180,7 +182,11 @@ function AlunasList() {
                                     <td>{formatDate(a.data_inicio)}</td>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            {formatDate(a.data_vencimento)}
+                                            {(() => {
+                                                const today = new Date();
+                                                const day = a.data_vencimento ? a.data_vencimento.split('-')[2] : '--';
+                                                return `${day}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+                                            })()}
                                             {getBadgeVencimento(a.data_vencimento, a.pago_mes_atual)}
                                         </div>
                                     </td>
