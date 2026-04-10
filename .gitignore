@@ -40,3 +40,11 @@ Thumbs.db
 # PHP storage/uploads (optional, depends if you want to keep existing uploads)
 api/uploads/*
 !api/uploads/.gitkeep
+
+# Local Debug and Proposals
+api/ia/*.log
+tmp_debug.txt
+proposta_consultoria.md
+
+# Production builds
+pacote_producao/
