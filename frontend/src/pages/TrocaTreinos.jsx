@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import PrintableTreino from '../components/PrintableTreino';
 
 function TrocaTreinos({ geral, professora }) {
   const { api, user, isAdmin } = useAuth();
@@ -11,6 +12,10 @@ function TrocaTreinos({ geral, professora }) {
   const [selectedAluna, setSelectedAluna] = useState(null);
   const [expandedTreino, setExpandedTreino] = useState(null);
   const [search, setSearch] = useState('');
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaCooldown, setIaCooldown] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [treinoParaDocumento, setTreinoParaDocumento] = useState(null);
 
   // Novo treino form
   const [novoTreino, setNovoTreino] = useState({
@@ -54,10 +59,16 @@ function TrocaTreinos({ geral, professora }) {
     }
   };
 
-  // Agrupar treinos por aluna, garantindo que todas as alunas ativas apareçam
-  const treinosPorAluna = alunas.reduce((acc, a) => {
+  // Agrupar treinos por aluna, filtrando se não for visão geral
+  const alunasFiltradas = geral 
+    ? alunas 
+    : alunas.filter(a => a.professora_id === user?.id);
+
+  const treinosPorAluna = alunasFiltradas.reduce((acc, a) => {
     acc[a.id] = {
+      id: a.id,
       nome: a.nome,
+      professora_id: a.professora_id,
       professora_nome: a.professora_nome,
       treinos: [],
     };
@@ -170,6 +181,27 @@ function TrocaTreinos({ geral, professora }) {
     }
   };
 
+  const gerarSugestaoIA = async (alunaId, forEdit = false) => {
+    if (!alunaId) return;
+    setIaLoading(true);
+    try {
+      const res = await api.post('/ia/gerar-treino', { aluna_id: alunaId });
+      if (forEdit) {
+        setEditForm(prev => ({ ...prev, descricao_treino: res.data.sugestao }));
+      } else {
+        setNovoTreino(prev => ({ ...prev, descricao_treino: res.data.sugestao }));
+      }
+      // Iniciar cooldown de 3 segundos após sucesso
+      setIaCooldown(true);
+      setTimeout(() => setIaCooldown(false), 3000);
+    } catch (err) {
+      console.error('Erro ao gerar treino com IA:', err);
+      alert('Não foi possível gerar a sugestão no momento.');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
 
 
   const calcularProxima = (data, semanas) => {
@@ -204,6 +236,32 @@ function TrocaTreinos({ geral, professora }) {
     if (!dateStr) return '-';
     const [y, m, d] = dateStr.split('-');
     return `${d}/${m}/${y}`;
+  };
+
+  const renderLivePreview = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, index) => {
+      let lineContent = line.trim();
+      if (!lineContent) return <br key={index} />;
+
+      // Títulos
+      if (lineContent.startsWith('**') && lineContent.endsWith('**')) {
+        return <h3 key={index}>{lineContent.replace(/\*\*/g, '')}</h3>;
+      }
+
+      // Negrito no meio
+      const parts = line.split('**');
+      const formattedLine = parts.map((part, i) => 
+        i % 2 === 1 ? <strong key={i} style={{ color: 'var(--primary)' }}>{part}</strong> : part
+      );
+
+      // Listas
+      if (lineContent.startsWith('* ') || lineContent.startsWith('- ')) {
+        return <li key={index}>{formattedLine}</li>;
+      }
+
+      return <p key={index}>{formattedLine}</p>;
+    });
   };
 
   const abrirEdicao = (treino) => {
@@ -339,16 +397,18 @@ function TrocaTreinos({ geral, professora }) {
                   👩‍🏫 {a.professora_nome || 'Sem Professora'}
                 </div>
               </h3>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => {
-                  setSelectedAluna(a.id);
-                  setShowModal(true);
-                  setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, foto: null });
-                }}
-              >
-                + Novo Treino
-              </button>
+              {(isAdmin || a.professora_id === user?.id) && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    setSelectedAluna(a.id);
+                    setShowModal(true);
+                    setNovoTreino({ data_treino: '', data_proxima: '', duracao_semanas: 8, foto: null });
+                  }}
+                >
+                  + Novo Treino
+                </button>
+              )}
             </div>
 
 
@@ -382,74 +442,99 @@ function TrocaTreinos({ geral, professora }) {
                           </div>
                         </td>
                         <td>
-                          <div className="flex gap-1">
-                            <button
-                              className="btn btn-sm btn-outline"
-                              onClick={() => abrirEdicao(t)}
-                              title="Editar treino"
-                            >
-                              ✏️
-                            </button>
+                          {(isAdmin || a.professora_id === user?.id) && (
+                            <div className="flex gap-1">
+                              <button
+                                className="btn btn-sm btn-outline"
+                                onClick={() => abrirEdicao(t)}
+                                title="Editar treino"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                className="btn btn-sm btn-outline"
+                                onClick={() => setExpandedTreino(expandedTreino === t.id ? null : t.id)}
+                                title="Ver exercícios"
+                              >
+                                {expandedTreino === t.id ? '▲' : '▼'}
+                              </button>
+                              {t.status === 'pendente' && (
+                                <button
+                                  className="btn btn-sm btn-outline"
+                                  onClick={() => marcarConcluido(t.id)}
+                                  title="Marcar concluído"
+                                >
+                                  ✓
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <button
+                                  className="btn btn-sm btn-outline"
+                                  style={{ color: '#f44336', borderColor: '#f44336' }}
+                                  onClick={() => excluirTreino(t.id)}
+                                  title="Deletar treino"
+                                >
+                                  ×
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {/* Se não for a professora e nem admin, só pode ver os exercícios */}
+                          {(!isAdmin && a.professora_id !== user?.id) && (
                             <button
                               className="btn btn-sm btn-outline"
                               onClick={() => setExpandedTreino(expandedTreino === t.id ? null : t.id)}
                               title="Ver exercícios"
                             >
-                              {expandedTreino === t.id ? '▲' : '▼'}
+                              {expandedTreino === t.id ? 'Ver menos ▲' : 'Ver exercícios ▼'}
                             </button>
-                            {t.status === 'pendente' && (
-                              <button
-                                className="btn btn-sm btn-outline"
-                                onClick={() => marcarConcluido(t.id)}
-                                title="Marcar concluído"
-                              >
-                                ✓
-                              </button>
-                            )}
-                            {isAdmin && (
-                              <button
-                                className="btn btn-sm btn-outline"
-                                style={{ color: '#f44336', borderColor: '#f44336' }}
-                                onClick={() => excluirTreino(t.id)}
-                                title="Deletar treino"
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
+                          )}
                         </td>
                       </tr>
                       {expandedTreino === t.id && (
-                        <tr>
-                          <td colSpan="6" style={{
-                            background: 'rgba(0,0,0,0.2)',
-                            padding: '20px',
-                            borderTop: '2px solid var(--primary)'
-                          }}>
-                            <div className="flex jc-between ai-center mb-3">
-                              <h4 style={{ color: 'var(--primary)', margin: 0 }}>
-                                📋 Treino {t.treino_num}º - Exercícios Digitados
-                              </h4>
-                            </div>
-                            
-                            {t.descricao_treino ? (
-                              <div className="mb-3" style={{ 
-                                padding: '15px', 
-                                background: 'rgba(226, 0, 122, 0.05)', 
-                                borderRadius: '8px', 
-                                border: '1px solid rgba(226, 0, 122, 0.2)',
-                                borderLeft: '4px solid var(--primary)',
-                                whiteSpace: 'pre-wrap',
-                                fontSize: '1rem',
-                                color: 'white'
-                              }}>
-                                {t.descricao_treino}
+                        <tr className="expanded-row">
+                          <td colSpan="6">
+                            <div className="expanded-treino-container">
+                              <div className="flex jc-between ai-center mb-3">
+                                <h4 style={{ color: 'var(--primary)', margin: 0 }}>
+                                  📋 Treino {t.treino_num}º - Exercícios Digitados
+                                </h4>
+                                  <div className="flex gap-2">
+                                    <button 
+                                      className="btn btn-sm btn-primary"
+                                      onClick={() => {
+                                        setTreinoParaDocumento({
+                                          ...t,
+                                          aluna_nome: a.nome,
+                                          professora_nome: a.professora_nome
+                                        });
+                                        setShowPrintModal(true);
+                                      }}
+                                    >
+                                      👁️ Visualizar
+                                    </button>
+                                    <button 
+                                      className="btn btn-sm btn-outline"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(t.descricao_treino);
+                                        alert('Treino copiado para a área de transferência!');
+                                      }}
+                                    >
+                                      📄 Copiar Texto
+                                    </button>
+                                  </div>
                               </div>
-                            ) : (
-                               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                 Nenhuma descrição ou exercícios cadastrados para este treino.
-                               </div>
-                            )}
+                              
+                              {t.descricao_treino ? (
+                                <div className="expanded-treino-content">
+                                  {renderLivePreview(t.descricao_treino)}
+                                </div>
+                              ) : (
+                                 <div className="text-muted text-center p-3">
+                                   Nenhuma descrição ou exercícios cadastrados para este treino.
+                                 </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -532,14 +617,31 @@ function TrocaTreinos({ geral, professora }) {
 
             <div className="form-group mb-3">
               <label>Descrição do Treino (Opcional)</label>
+              <button 
+                className="btn-ai-gen" 
+                onClick={() => gerarSugestaoIA(selectedAluna)}
+                disabled={iaLoading || iaCooldown}
+                type="button"
+              >
+                {iaLoading ? '✨ Gerando...' : (iaCooldown ? '⏳ Aguarde...' : '✨ Sugerir com Magli AI')}
+              </button>
               <textarea
                 className="form-control"
-                rows="4"
+                rows="8"
                 placeholder="Ex: Supino 3x12, Agachamento 4x10..."
                 value={novoTreino.descricao_treino}
                 onChange={e => setNovoTreino({ ...novoTreino, descricao_treino: e.target.value })}
-                style={{ resize: 'vertical' }}
+                style={{ resize: 'vertical', marginTop: '10px' }}
               ></textarea>
+
+              {novoTreino.descricao_treino && (
+                <div className="live-preview-container fade-in">
+                  <span className="live-preview-label">👁️ Prévia do Cronograma:</span>
+                  <div className="live-preview-content">
+                    {renderLivePreview(novoTreino.descricao_treino)}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 mt-3">
@@ -625,13 +727,35 @@ function TrocaTreinos({ geral, professora }) {
 
             <div className="form-group mb-3">
               <label>Descrição do Treino</label>
+              <button 
+                className="btn-ai-gen" 
+                onClick={() => {
+                  const treinoOriginal = treinos.find(t => t.id === editModal);
+                  if (treinoOriginal) {
+                    gerarSugestaoIA(treinoOriginal.aluna_id, true);
+                  }
+                }}
+                disabled={iaLoading || iaCooldown}
+                type="button"
+              >
+                {iaLoading ? '✨ Gerando...' : (iaCooldown ? '⏳ Aguarde...' : '✨ Sugerir Nova Evolução com IA')}
+              </button>
               <textarea
                 className="form-control"
-                rows="4"
+                rows="8"
                 value={editForm.descricao_treino}
                 onChange={e => setEditForm({ ...editForm, descricao_treino: e.target.value })}
-                style={{ resize: 'vertical' }}
+                style={{ resize: 'vertical', marginTop: '10px' }}
               ></textarea>
+
+              {editForm.descricao_treino && (
+                <div className="live-preview-container fade-in">
+                  <span className="live-preview-label">👁️ Prévia do Cronograma:</span>
+                  <div className="live-preview-content">
+                    {renderLivePreview(editForm.descricao_treino)}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="form-group mb-3">
@@ -660,6 +784,36 @@ function TrocaTreinos({ geral, professora }) {
         </div>
       )}
 
+      {/* Modal de Impressão / Visualização */}
+      {showPrintModal && treinoParaDocumento && (
+        <div className="modal-overlay print-reset-wrapper" onClick={() => setShowPrintModal(false)} style={{ zIndex: 2000 }}>
+          <div className="modal print-reset-wrapper" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', width: '95%', padding: 0, overflow: 'hidden' }}>
+            <div className="modal-header no-print" style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--glass-border)' }}>
+              <h3 style={{ margin: 0 }}>Visualização de Treino</h3>
+              <div className="flex gap-2">
+                <button 
+                  className="btn btn-primary btn-sm no-print" 
+                  onClick={() => window.print()}
+                >
+                  🖨️ Imprimir / PDF
+                </button>
+                <button className="modal-close no-print" onClick={() => setShowPrintModal(false)}>×</button>
+              </div>
+            </div>
+            <div className="print-reset-wrapper" style={{ maxHeight: '80vh', overflowY: 'auto', backgroundColor: '#f5f5f5', padding: '20px' }}>
+              <div className="print-area">
+                <PrintableTreino 
+                  studentName={treinoParaDocumento.aluna_nome}
+                  date={formatDate(treinoParaDocumento.data_treino)}
+                  duration={`${treinoParaDocumento.duracao_semanas || 8} SEMANAS`}
+                  description={treinoParaDocumento.descricao_treino}
+                  professorName={treinoParaDocumento.professora_nome}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

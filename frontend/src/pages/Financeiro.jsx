@@ -224,6 +224,39 @@ function Financeiro() {
       </div>
 
       <div className="financeiro-layout">
+        {/* Sidebar Graphics moved to Top */}
+        <div className="financeiro-sidebar mb-4">
+          <div className="card">
+            <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>📊 Balanço Geral</h3>
+            {totalReceitas > 0 || totalDespesas > 0 ? (
+              <div style={{ width: '100%', height: 250 }}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value) => formatValor(value)} />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center text-muted">Sem dados suficientes para gerar o gráfico.</p>
+            )}
+          </div>
+        </div>
+
         <div className="financeiro-main">
           {/* Tabs */}
           <div className="financeiro-tabs mb-2">
@@ -493,38 +526,6 @@ function Financeiro() {
           )}
         </div>
 
-        {/* Sidebar Graphics */}
-        <div className="financeiro-sidebar">
-          <div className="card">
-            <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>📊 Balanço Geral</h3>
-            {totalReceitas > 0 || totalDespesas > 0 ? (
-              <div style={{ width: '100%', height: 250 }}>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip formatter={(value) => formatValor(value)} />
-                    <Legend verticalAlign="bottom" height={36} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="text-center text-muted">Sem dados suficientes para gerar o gráfico.</p>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

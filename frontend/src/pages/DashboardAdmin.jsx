@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BirthdayAlerts from '../components/BirthdayAlerts';
+import AIChat from '../components/AIChat';
 
 function DashboardAdmin() {
   const { user, logout } = useAuth();
@@ -19,6 +20,7 @@ function DashboardAdmin() {
     { to: 'anamnese', icon: '🩺', label: 'Anamnese' },
     { to: 'alunas', icon: '👥', label: 'Alunas' },
     { to: 'financeiro', icon: '💰', label: 'Financeiro' },
+    { to: 'fiscal', icon: '📄', label: 'Controle' },
     { to: 'treinos', icon: '📊', label: 'Treinos Geral' },
     { to: 'ex-alunas', icon: '📋', label: 'Ex-Alunas' },
     { to: 'equipe', icon: '👩‍🏫', label: 'Equipe' },
@@ -84,6 +86,7 @@ function DashboardAdmin() {
       <main className="main-content" onClick={() => menuOpen && setMenuOpen(false)}>
         <BirthdayAlerts />
         <Outlet />
+        <AIChat />
       </main>
     </div>
   );

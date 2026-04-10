@@ -15,6 +15,7 @@ import Usuarios from './pages/Usuarios';
 import Configuracoes from './pages/Configuracoes';
 import AlunasList from './pages/AlunasList';
 import Anamnese from './pages/Anamnese';
+import Controle from './pages/Fiscal';
 import './App.css';
 
 // Componente para proteger rotas
@@ -79,6 +80,7 @@ function AppRoutes() {
         <Route path="anamnese/:id" element={<Anamnese />} />
         <Route path="alunas" element={<AlunasList />} />
         <Route path="financeiro/*" element={<Financeiro />} />
+        <Route path="fiscal" element={<Controle />} />
         <Route path="treinos" element={<TrocaTreinos geral={true} />} />
         <Route path="ex-alunas" element={<ExAlunas />} />
         <Route path="horarios" element={<QuadroHorarios />} />

@@ -8,7 +8,9 @@ function Usuarios() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editId, setEditId] = useState(null);
-    const [form, setForm] = useState({ nome: '', email: '', senha: '', perfil: 'professora' });
+    const [form, setForm] = useState({ nome: '', email: '', senha: '', confirmarSenha: '', perfil: 'professora' });
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
@@ -33,14 +35,18 @@ function Usuarios() {
 
     const openAdd = () => {
         setEditId(null);
-        setForm({ nome: '', email: '', senha: '', perfil: 'professora' });
+        setForm({ nome: '', email: '', senha: '', confirmarSenha: '', perfil: 'professora' });
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         setError('');
         setShowModal(true);
     };
 
     const openEdit = (u) => {
         setEditId(u.id);
-        setForm({ nome: u.nome, email: u.email, senha: '', perfil: u.perfil });
+        setForm({ nome: u.nome, email: u.email, senha: '', confirmarSenha: '', perfil: u.perfil });
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         setError('');
         setShowModal(true);
     };
@@ -59,6 +65,11 @@ function Usuarios() {
             return;
         }
 
+        if (form.senha && form.senha !== form.confirmarSenha) {
+            setError('As senhas não coincidem.');
+            return;
+        }
+
         try {
             if (editId) {
                 await api.put(`/usuarios/${editId}`, form);
@@ -68,7 +79,7 @@ function Usuarios() {
                 setSuccess('Membro adicionado com sucesso!');
             }
             setShowModal(false);
-            setForm({ nome: '', email: '', senha: '', perfil: 'professora' });
+            setForm({ nome: '', email: '', senha: '', confirmarSenha: '', perfil: 'professora' });
             loadUsuarios();
             setTimeout(() => setSuccess(''), 3000);
         } catch (err) {
@@ -242,13 +253,66 @@ function Usuarios() {
                                 <label className={editId ? '' : 'required'}>
                                     Senha {editId && <span className="text-muted" style={{ fontSize: '0.8rem' }}>(deixe em branco para manter)</span>}
                                 </label>
-                                <input
-                                    type="password"
-                                    className="form-control"
-                                    placeholder={editId ? 'Nova senha (opcional)' : 'Defina a senha'}
-                                    value={form.senha}
-                                    onChange={e => setForm({ ...form, senha: e.target.value })}
-                                />
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        className="form-control"
+                                        placeholder={editId ? 'Nova senha (opcional)' : 'Defina a senha'}
+                                        value={form.senha}
+                                        onChange={e => setForm({ ...form, senha: e.target.value })}
+                                        style={{ paddingRight: '40px' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontSize: '1.2rem',
+                                            color: '#666',
+                                            padding: 0
+                                        }}
+                                    >
+                                        {showPassword ? '👁️‍🗨️' : '👁️'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="form-group mb-3">
+                                <label className={form.senha ? 'required' : ''}>Confirmar Senha</label>
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        className="form-control"
+                                        placeholder="Repita a senha"
+                                        value={form.confirmarSenha}
+                                        onChange={e => setForm({ ...form, confirmarSenha: e.target.value })}
+                                        style={{ paddingRight: '40px' }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            background: 'none',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontSize: '1.2rem',
+                                            color: '#666',
+                                            padding: 0
+                                        }}
+                                    >
+                                        {showConfirmPassword ? '👁️‍🗨️' : '👁️'}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="form-group mb-4">

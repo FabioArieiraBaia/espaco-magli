@@ -3,7 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 
 function Configuracoes() {
     const { api } = useAuth();
-    const [precos, setPrecos] = useState({ preco_1x: '', preco_2x: '', preco_3x: '', preco_4x: '', preco_5x: '', preco_promocional: '' });
+    const [precos, setPrecos] = useState({ 
+        preco_1x: '', preco_2x: '', preco_3x: '', preco_4x: '', preco_5x: '', preco_promocional: '',
+        gemini_api_key: '', 
+        gemini_api_model: 'gemini-2.5-flash-lite',
+        gemini_api_name: '',
+        gemini_api_personality: ''
+    });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState('');
@@ -25,6 +31,10 @@ function Configuracoes() {
                 preco_4x: res.data.preco_4x || '',
                 preco_5x: res.data.preco_5x || '',
                 preco_promocional: res.data.preco_promocional || '',
+                gemini_api_key: res.data.gemini_api_key || '',
+                gemini_api_model: res.data.gemini_api_model || 'gemini-2.5-flash-lite',
+                gemini_api_name: res.data.gemini_api_name || '',
+                gemini_api_personality: res.data.gemini_api_personality || '',
             });
         } catch (err) {
             console.error('Erro ao carregar configurações:', err);
@@ -157,6 +167,77 @@ function Configuracoes() {
                     </div>
                     <button type="submit" className="btn btn-primary mt-3" disabled={saving}>
                         {saving ? 'Salvando...' : 'Salvar Preços'}
+                    </button>
+                </form>
+            </div>
+
+            {/* Configurações de IA */}
+            <div className="card mb-4" style={{ border: '1px solid var(--primary-glow)' }}>
+                <h2 className="mb-3" style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    ✨ Magli AI (Inteligência Artificial)
+                </h2>
+                <p className="text-muted mb-4" style={{ fontSize: '0.85rem' }}>
+                    Configure a chave de API do Google Gemini para habilitar sugestões de treino e o assistente administrativo.
+                </p>
+
+                <form onSubmit={salvarPrecos}>
+                    <div className="form-group" style={{ maxWidth: '600px' }}>
+                        <label style={{ fontWeight: 600 }}>Google Gemini API Key</label>
+                        <input
+                            type="password"
+                            className="form-control"
+                            placeholder="AIzaSy..."
+                            value={precos.gemini_api_key}
+                            onChange={e => setPrecos({ ...precos, gemini_api_key: e.target.value })}
+                        />
+                        <small className="text-muted">A chave fica oculta por segurança. Insira a nova chave e clique em salvar.</small>
+                    </div>
+
+                    <div className="form-group mt-3" style={{ maxWidth: '600px' }}>
+                        <label style={{ fontWeight: 600 }}>Nome da IA</label>
+                        <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Ex: Magli Bot"
+                            value={precos.gemini_api_name}
+                            onChange={e => setPrecos({ ...precos, gemini_api_name: e.target.value })}
+                        />
+                        <small className="text-muted">Como você quer que o assistente se identifique no chat.</small>
+                    </div>
+
+                    <div className="form-group mt-3" style={{ maxWidth: '600px' }}>
+                        <label style={{ fontWeight: 600 }}>Personalidade e Comportamento</label>
+                        <textarea
+                            className="form-control"
+                            rows="4"
+                            placeholder="Ex: Você é uma assistente prestativa que usa o tom profissional do Pilates e é focada em encantar as alunas..."
+                            value={precos.gemini_api_personality}
+                            onChange={e => setPrecos({ ...precos, gemini_api_personality: e.target.value })}
+                            style={{ resize: 'vertical' }}
+                        />
+                        <small className="text-muted">Descreva o tom de voz, regras de conduta e como a IA deve se comportar.</small>
+                    </div>
+
+                    <div className="form-group mt-3" style={{ maxWidth: '600px' }}>
+                        <label style={{ fontWeight: 600 }}>Modelo de IA (Versão)</label>
+                        <input 
+                            type="text"
+                            className="form-control"
+                            list="gemini-models"
+                            value={precos.gemini_api_model}
+                            onChange={e => setPrecos({ ...precos, gemini_api_model: e.target.value })}
+                        />
+                        <datalist id="gemini-models">
+                            <option value="gemini-2.5-flash-lite" />
+                            <option value="gemini-2.5-flash" />
+                            <option value="gemini-2.0-flash-lite" />
+                            <option value="gemini-2.0-flash" />
+                        </datalist>
+                        <small className="text-muted">Dica: Use versões "lite" (ex: gemini-2.5-flash-lite) para respostas mais rápidas e limites de uso mais flexíveis.</small>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary mt-3" disabled={saving}>
+                        {saving ? 'Salvando...' : 'Salvar Chave IA'}
                     </button>
                 </form>
             </div>
