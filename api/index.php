@@ -820,7 +820,7 @@ try {
         // --- FIM DA GERAÇÃO ---
 
         $stmt = $pdo->prepare("
-        SELECT r.*, a.nome as aluna_nome, a.desconto as aluna_desconto, a.data_vencimento as aluna_vencimento
+        SELECT r.*, a.nome as aluna_nome, a.email as aluna_email, a.desconto as aluna_desconto, a.data_vencimento as aluna_vencimento
         FROM receitas r
         JOIN alunas a ON r.aluna_id = a.id
         WHERE r.mes = ?
@@ -883,7 +883,7 @@ try {
         $mes = $_GET['mes'] ?? date('Y-m');
         
         $query = "
-            SELECT r.*, a.nome as aluna_nome, a.cpf as aluna_cpf, a.nascimento as aluna_nascimento, a.desconto as aluna_desconto
+            SELECT r.*, a.nome as aluna_nome, a.email as aluna_email, a.cpf as aluna_cpf, a.nascimento as aluna_nascimento, a.desconto as aluna_desconto
             FROM receitas r
             JOIN alunas a ON r.aluna_id = a.id
             WHERE r.mes = ? AND r.pago = 1

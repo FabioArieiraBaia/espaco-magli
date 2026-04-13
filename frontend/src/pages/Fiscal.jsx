@@ -112,6 +112,7 @@ function Controle() {
             <thead>
               <tr>
                 <th>Aluna</th>
+                <th>Email</th>
                 <th>CPF</th>
                 <th>Meio de Pagamento</th>
                 <th>Conta</th>
@@ -123,6 +124,7 @@ function Controle() {
               ${itensParaImprimir.map(d => `
                 <tr>
                   <td><strong>${d.aluna_nome}</strong></td>
+                  <td>${d.aluna_email || '-'}</td>
                   <td>${d.aluna_cpf || '-'}</td>
                   <td>${d.meio_pagamento}</td>
                   <td>${d.tipo_conta === 'cnpj' ? 'Academia (CNPJ)' : 'Personal (CPF)'}</td>
@@ -246,6 +248,7 @@ function Controle() {
                   />
                 </th>
                 <th>Aluna</th>
+                <th>Email</th>
                 <th className="hide-mobile">Meio</th>
                 <th>Conta</th>
                 <th>Valor Líquido</th>
@@ -277,6 +280,9 @@ function Controle() {
                       CPF: {d.aluna_cpf || 'Não informado'}
                     </div>
                   </td>
+                  <td>
+                    <div style={{ fontSize: '0.85rem' }}>{d.aluna_email || '-'}</div>
+                  </td>
                   <td className="hide-mobile">
                     <span className="treino-badge" style={{ fontSize: '0.7rem' }}>
                       {d.meio_pagamento}
@@ -293,7 +299,7 @@ function Controle() {
               ))}
               {dadosFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="text-center text-muted" style={{ padding: '3rem' }}>
+                  <td colSpan="7" className="text-center text-muted" style={{ padding: '3rem' }}>
                     Nenhum pagamento recebido encontrado para os filtros selecionados.
                   </td>
                 </tr>
