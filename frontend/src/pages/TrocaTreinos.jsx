@@ -181,6 +181,16 @@ function TrocaTreinos({ geral, professora }) {
     }
   };
 
+  const limparDescricao = async (treinoId) => {
+    if (!window.confirm('Deseja limpar a descrição deste treino? Os exercícios digitados serão apagados.')) return;
+    try {
+      await api.put(`/treinos/${treinoId}`, { descricao_treino: '' });
+      loadTreinos();
+    } catch (error) {
+      console.error('Erro ao limpar descrição:', error);
+    }
+  };
+
   const gerarSugestaoIA = async (alunaId, forEdit = false) => {
     if (!alunaId) return;
     setIaLoading(true);
@@ -522,6 +532,15 @@ function TrocaTreinos({ geral, professora }) {
                                     >
                                       📄 Copiar Texto
                                     </button>
+                                    {(isAdmin || a.professora_id === user?.id) && t.descricao_treino && (
+                                      <button 
+                                        className="btn btn-sm btn-outline"
+                                        style={{ color: '#f44336', borderColor: '#f44336' }}
+                                        onClick={() => limparDescricao(t.id)}
+                                      >
+                                        🗑️ Limpar Descrição
+                                      </button>
+                                    )}
                                   </div>
                               </div>
                               
@@ -617,14 +636,7 @@ function TrocaTreinos({ geral, professora }) {
 
             <div className="form-group mb-3">
               <label>Descrição do Treino (Opcional)</label>
-              <button 
-                className="btn-ai-gen" 
-                onClick={() => gerarSugestaoIA(selectedAluna)}
-                disabled={iaLoading || iaCooldown}
-                type="button"
-              >
-                {iaLoading ? '✨ Gerando...' : (iaCooldown ? '⏳ Aguarde...' : '✨ Sugerir com Magli AI')}
-              </button>
+
               <textarea
                 className="form-control"
                 rows="8"
@@ -727,19 +739,7 @@ function TrocaTreinos({ geral, professora }) {
 
             <div className="form-group mb-3">
               <label>Descrição do Treino</label>
-              <button 
-                className="btn-ai-gen" 
-                onClick={() => {
-                  const treinoOriginal = treinos.find(t => t.id === editModal);
-                  if (treinoOriginal) {
-                    gerarSugestaoIA(treinoOriginal.aluna_id, true);
-                  }
-                }}
-                disabled={iaLoading || iaCooldown}
-                type="button"
-              >
-                {iaLoading ? '✨ Gerando...' : (iaCooldown ? '⏳ Aguarde...' : '✨ Sugerir Nova Evolução com IA')}
-              </button>
+
               <textarea
                 className="form-control"
                 rows="8"

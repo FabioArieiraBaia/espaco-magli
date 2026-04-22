@@ -33,6 +33,7 @@ api.interceptors.request.use((config) => {
 
   // Tunelamento de método: PUT e DELETE viram POST com _method
   if (method === 'put' || method === 'delete') {
+    config.headers['X-HTTP-Method-Override'] = method.toUpperCase();
     config.data = config.data || {};
     if (typeof config.data === 'string') {
       try { config.data = JSON.parse(config.data); } catch (e) { }

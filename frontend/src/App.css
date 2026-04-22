@@ -2301,32 +2301,6 @@ tr:last-child td {
   transition: var(--transition);
 }
 
-.btn-ai-gen {
-  background: linear-gradient(135deg, #e2007a, #ff8eca);
-  border: none;
-  color: white;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1.25rem;
-  border-radius: 50px;
-  cursor: pointer;
-  font-weight: 700;
-  transition: all 0.3s ease;
-  margin: 10px 0;
-  box-shadow: 0 4px 15px rgba(226, 0, 122, 0.3);
-}
-
-.btn-ai-gen:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(226, 0, 122, 0.5);
-  filter: brightness(1.1);
-}
-
-.btn-ai-gen:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
 /* ========================================
    PRINT STYLES
    ======================================== */

@@ -88,11 +88,7 @@ function Usuarios() {
     };
 
     const deleteUser = async (u) => {
-        const confirmMsg = u.ativo
-            ? 'Deseja desativar este membro da equipe?'
-            : 'Deseja EXCLUIR PERMANENTEMENTE este membro? Esta ação não pode ser desfeita.';
-
-        if (!window.confirm(confirmMsg)) return;
+        if (!window.confirm(`Deseja EXCLUIR PERMANENTEMENTE o membro "${u.nome}"? Esta ação não pode ser desfeita.`)) return;
 
         try {
             const res = await api.delete(`/usuarios/${u.id}`);

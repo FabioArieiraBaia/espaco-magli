@@ -2,7 +2,7 @@
 // API Magli - Backend  SQLite
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-HTTP-Method-Override');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Cache-Control: post-check=0, pre-check=0', false);
 header('Pragma: no-cache');
@@ -82,9 +82,24 @@ try {
     $GLOBALS['_RAW_INPUT'] = file_get_contents('php://input');
     $GLOBALS['_PARSED_INPUT'] = json_decode($GLOBALS['_RAW_INPUT'], true) ?? [];
 
-    // Suporte a method override para hosts que bloqueiam PUT/DELETE
-    if ($method === 'POST' && isset($GLOBALS['_PARSED_INPUT']['_method'])) {
-        $method = strtoupper($GLOBALS['_PARSED_INPUT']['_method']);
+    // Method override: suporte a PUT/DELETE tunelados como POST
+    // Prioridade: header $_SERVER (mais confiável) > header getallheaders() > body _method
+    if ($method === 'POST') {
+        $overrideByServer = $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] ?? null;
+        $overrideByHeader = null;
+        $allHeaders = getallheaders();
+        foreach ($allHeaders as $k => $v) {
+            if (strtolower($k) === 'x-http-method-override') {
+                $overrideByHeader = $v;
+                break;
+            }
+        }
+        $overrideByBody = $GLOBALS['_PARSED_INPUT']['_method'] ?? null;
+
+        $override = $overrideByServer ?? $overrideByHeader ?? $overrideByBody;
+        if ($override) {
+            $method = strtoupper($override);
+        }
     }
 
     $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -446,6 +461,10 @@ try {
 
                 // Marcar como inativa
                 $pdo->prepare("UPDATE alunas SET ativa = 0 WHERE id = ?")->execute([$id]);
+
+                // Limpar dados financeiros (receitas não pagas) do mês atual em diante
+                $mesAtual = date('Y-m');
+                $pdo->prepare("DELETE FROM receitas WHERE aluna_id = ? AND pago = 0 AND mes >= ?")->execute([$id, $mesAtual]);
             }
 
             jsonResponse(['success' => true]);
@@ -1011,7 +1030,7 @@ try {
         }
 
         // POST - Criar usuário (senha obrigatória)
-        if ($method === 'POST') {
+        if ($method === 'POST' && !$id) {
             $input = getInput();
 
             if (empty($input['senha'])) {
@@ -1045,34 +1064,29 @@ try {
             jsonResponse(['success' => true]);
         }
 
-        // DELETE - Deletar/Desativar usuário
+        // DELETE - Excluir usuário permanentemente
         if ($method === 'DELETE' && $id) {
-            // Buscar status atual
-            $stmt = $pdo->prepare("SELECT ativo FROM usuarios WHERE id = ?");
-            $stmt->execute([$id]);
-            $u = $stmt->fetch();
-
-            if (!$u)
-                jsonResponse(['error' => 'Usuário não encontrado'], 404);
-
-            if ($u['ativo']) {
-                // Se ativo, apenas desativa (lógica antiga)
-                $stmt = $pdo->prepare("UPDATE usuarios SET ativo = 0 WHERE id = ?");
-                $stmt->execute([$id]);
-                jsonResponse(['success' => true, 'message' => 'Membro desativado com sucesso']);
-            } else {
-                // Se já inativo, tenta excluir permanentemente
-                // Verificação de segurança: não pode excluir se tiver alunas vinculadas
-                $stmt = $pdo->prepare("SELECT COUNT(*) FROM alunas WHERE professora_id = ?");
-                $stmt->execute([$id]);
-                if ($stmt->fetchColumn() > 0) {
-                    jsonResponse(['error' => 'Este membro possui alunas vinculadas. Troque a professora das alunas antes de excluir permanentemente.'], 400);
-                }
-
-                $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id = ?");
-                $stmt->execute([$id]);
-                jsonResponse(['success' => true, 'message' => 'Membro excluído permanentemente']);
+            // Verificar se é o próprio usuário logado
+            $user = getAuthUser($pdo);
+            if ($user['id'] == $id) {
+                jsonResponse(['error' => 'Você não pode excluir seu próprio usuário.'], 400);
             }
+
+            // Só bloqueia se tiver alunas ATIVAS vinculadas
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM alunas WHERE professora_id = ? AND ativa = 1");
+            $stmt->execute([$id]);
+            $countAtivas = $stmt->fetchColumn();
+
+            if ($countAtivas > 0) {
+                jsonResponse(['error' => "Este membro possui $countAtivas aluna(s) ativa(s) vinculada(s). Altere o professor dessas alunas antes de excluir."], 400);
+            }
+
+            // Desvincular alunas inativas (set professora_id = NULL)
+            $pdo->prepare("UPDATE alunas SET professora_id = NULL WHERE professora_id = ? AND ativa = 0")->execute([$id]);
+
+            $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id = ?");
+            $stmt->execute([$id]);
+            jsonResponse(['success' => true, 'message' => 'Membro excluído com sucesso']);
         }
     }
 
