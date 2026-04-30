@@ -139,9 +139,10 @@ function TrocaTreinos({ geral, professora }) {
         data_treino: novoTreino.data_treino,
         data_proxima: novoTreino.data_proxima,
         duracao_semanas: novoTreino.duracao_semanas,
+        descricao_treino: novoTreino.descricao_treino,
       });
       
-      const treinoId = res.data.id || (await api.get(`/treinos/professora/${user?.id}`)).data.sort((a,b) => b.id - a.id)[0].id;
+      const treinoId = res.data.id;
       
       loadTreinos();
       setShowModal(false);

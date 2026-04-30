@@ -646,7 +646,7 @@ try {
                 $input['descricao_treino'] ?? ''
             ]);
 
-            jsonResponse(['success' => true]);
+            jsonResponse(['success' => true, 'id' => $pdo->lastInsertId()]);
         }
 
         // PUT - Atualizar treino
